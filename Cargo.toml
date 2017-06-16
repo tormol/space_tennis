@@ -1,6 +1,6 @@
 [package]
 name = "space_tennis"
-version = "1.0.0"
+version = "0.0.0"
 authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
 
 [[bin]]
@@ -8,10 +8,8 @@ name = "SpaceTennis"
 path = "space_tennis.rs"
 
 [dependencies]
-piston = "0.23"
-piston_window = "0.49"
-piston2d-graphics = "0.16"
-piston2d-opengl_graphics = "0.31"
-vecmath = "0.2"
-num = "0.1.34"
-rand = "0.3.14"
+piston_window = "0.64"
+piston2d-opengl_graphics = "0.42"
+vecmath = "0.3"
+num = "0.1.39"
+rand = "0.3.15"
