@@ -24,7 +24,6 @@ use piston_window::{Context,DrawState,Transformed,color,math}; // from piston2d-
 use piston_window::types::Color; // from piston2d-graphics
 
 use std::f64::consts::PI;
-use std::cmp;
 use std::collections::vec_deque::VecDeque;
  // from piston::input:
 use piston_window::keyboard::Key;
@@ -38,7 +37,7 @@ use rand::Rng;
 const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
 const UPDATE_TIME: f64 = 1.0/60.0;
 const AREA: [f64;3] = [1.0, 1.0, 2.0]; // 
-const BALL_RADIUS: f64 = 0.1;
+const BALL_RADIUS: f64 = 0.125; // exact representable
 const RACKET_SIZE: [f64; 2] = [0.22, 0.15];
 const FOV: f64 = PI/3.0; // 60°
 const FRONT_FILLS: f64 = 0.8; // of the screen
@@ -60,9 +59,9 @@ impl Game {
     fn new() -> Self {Game {
         player_pos: [0.5, 0.5],
         opponent_pos: [0.5, 0.5],
-        ball_vel: [0.0, 0.0, 0.2],
+        ball_vel: [0.2, 0.1, -0.4],
         ball_pos: [0.5, 0.5, 1.0],
-        paused: true
+        paused: false
     } }
 
     fn render(&mut self,  draw_state: DrawState,  transform: math::Matrix2d,  gfx: &mut GlGraphics) {
@@ -86,7 +85,7 @@ impl Game {
         let front_offset = 0.5 - (front_frac/2.0);
         let front_size = front_frac;
         let front_area = [front_offset, front_offset, front_size, front_size];
-        piston_window::rectangle(color::hex("444444"), front_area, transform, gfx);
+        //piston_window::rectangle(color::hex("444444"), front_area, transform, gfx);
 
         // step 2: draw a rectangle that fills the back of the arena
         // i.e: render a centered cube at distance VIEW_DISTANCE with width and height 1
@@ -97,33 +96,48 @@ impl Game {
         let back_offset = 0.5 - (back_frac/2.0);
         let back_size = back_frac;
         let back_area = [back_offset, back_offset, back_size, back_size];
-        piston_window::rectangle(color::hex("000000"), back_area, transform, gfx);
+        //piston_window::rectangle(color::hex("000000"), back_area, transform, gfx);
 
-        // step 3: draw lines
+        fn draw_wall_marker(
+                color: [f32; 4],  depth: f64,  width: f64,
+                transform: math::Matrix2d,  gfx: &mut GlGraphics
+        ) {
+            // width is on the wall, aka the z-dimension.
+            // find the draw width by calculating the rectangle of the near and
+            // far edge, and setting the center of the lines to the median.
+            let near_viewable = 2.0*(depth-width/2.0)*f64::tan(FOV/2.0);
+            let far_viewable = 2.0*(depth+width/2.0)*f64::tan(FOV/2.0);
+            let near_area_frac = (AREA[0]/near_viewable, AREA[1]/near_viewable);
+            let far_area_frac = (AREA[0]/far_viewable, AREA[1]/far_viewable);
+            let near_topleft = (0.5 - (near_area_frac.0/2.0),  0.5 - (near_area_frac.1/2.0));
+            let near_bottomright = (0.5 + (near_area_frac.0/2.0),  0.5 + (near_area_frac.1/2.0));
+            let far_topleft = (0.5 - (far_area_frac.0/2.0),  0.5 - (far_area_frac.1/2.0));
+            let radius = ((far_topleft.0-near_topleft.0)/2.0, (far_topleft.1-near_topleft.1)/2.0);
+            let offset_x = (near_topleft.0+radius.0, near_bottomright.0-radius.0);
+            let offset_y = (near_topleft.1+radius.1, near_bottomright.1-radius.1);
+            // draw corners completely, and only once in case the color is translucent
+            let top    = [offset_x.0-radius.0, offset_y.0, offset_x.1-radius.0, offset_y.0];
+            let bottom = [offset_x.0+radius.0, offset_y.1, offset_x.1+radius.0, offset_y.1];
+            let left   = [offset_x.0, offset_y.0+radius.1, offset_x.0, offset_y.1+radius.1];
+            let right  = [offset_x.1, offset_y.0-radius.1, offset_x.1, offset_y.1-radius.1];
+            piston_window::line(color, radius.1, top, transform, gfx);
+            piston_window::line(color, radius.1, bottom, transform, gfx);
+            piston_window::line(color, radius.0, left, transform, gfx);
+            piston_window::line(color, radius.0, right, transform, gfx);
+        }
+        // draw the walls themselves
+        draw_wall_marker(color::hex("444444"), view_distance+AREA[2]/2.0, AREA[2], transform, gfx);
         let interval = AREA[2]/(WALL_LINES+1) as f64;
         let tgreen = color::hex("008800"); // terminal green
-        for depth in (0..(WALL_LINES+2)).map(|n| view_distance+interval*n as f64 ) {
-            let start_viewable = 2.0*(depth-LINE_WIDTH/2.0)*f64::tan(FOV/2.0);
-            let end_viewable = 2.0*(depth+LINE_WIDTH/2.0)*f64::tan(FOV/2.0);
-            let start_area_frac = AREA[0] / start_viewable;
-            let end_area_frac = AREA[0] / end_viewable;
-            let start_offset = (0.5 - (start_area_frac/2.0),  0.5 + (start_area_frac/2.0));
-            let end_offset = (0.5 - (end_area_frac/2.0),  0.5 + (end_area_frac/2.0));
-            let radius = (end_offset.0-start_offset.0) / 2.0;
-            let offset = (start_offset.0+radius, start_offset.1-radius);
-            // for simplicity the radius is calculated as if the lines potrude into the arena.
-            // ideally they should be painted on the wall; that requires finding the start and end depth,
-            // finding the thickness 
-            //let radius = (LINE_WIDTH/2.0) / viewable; // fixme should adjust for how much it covers
-            //let offset = (0.5 - (area_frac/2.0) - 2.0*radius,  0.5 + (area_frac/2.0) + 2.0*radius);
-            piston_window::line(tgreen, radius, [offset.0, offset.0-radius, offset.0, offset.1+radius], transform, gfx);
-            piston_window::line(tgreen, radius, [offset.0-radius, offset.0, offset.1+radius, offset.0], transform, gfx);
-            piston_window::line(tgreen, radius, [offset.0-radius, offset.1, offset.1+radius, offset.1], transform, gfx);
-            piston_window::line(tgreen, radius, [offset.1, offset.0-radius, offset.1, offset.1+radius], transform, gfx);
+        // the markers on the edges are thicker
+        draw_wall_marker(tgreen, view_distance, LINE_WIDTH*1.5, transform, gfx);
+        for n in 1..(WALL_LINES+1) {
+            draw_wall_marker(tgreen, view_distance + interval*n as f64, LINE_WIDTH, transform, gfx);
         }
+        draw_wall_marker(tgreen, view_distance+AREA[2], LINE_WIDTH*1.5, transform, gfx);
 
         // step 4: opponent racket
-        let racket_color = color::hex("cccccccc");
+        let racket_color = color::hex("ddddddaa");
         let opponent_frac = (RACKET_SIZE[0] / back_viewable, RACKET_SIZE[1] / back_viewable);
         let opponent_pos = (back_offset+self.opponent_pos[0]*back_frac, back_offset+self.opponent_pos[1]*back_frac);
         let opponent_offset = (opponent_pos.0-opponent_frac.0/2.0, opponent_pos.1-opponent_frac.1/2.0);
@@ -131,6 +145,7 @@ impl Game {
         piston_window::rectangle(racket_color, opponent_area, transform, gfx);
 
         // step 5: ball
+        draw_wall_marker(color::hex("eeeeee88"), view_distance+self.ball_pos[2], LINE_WIDTH, transform, gfx);
         let ball_color = color::hex("33ff33cc");
         let ball_viewable = 2.0*(view_distance+self.ball_pos[2])*f64::tan(FOV/2.0);
         let ball_depth_frac = (AREA[0]/ball_viewable, AREA[1]/ball_viewable);
@@ -146,27 +161,83 @@ impl Game {
         let player_offset = (player_pos.0-player_frac.0/2.0, player_pos.1-player_frac.1/2.0);
         let player_area = [player_offset.0, player_offset.1, player_frac.0, player_frac.1];
         piston_window::rectangle(racket_color, player_area, transform, gfx);
+        piston_window::rectangle(color::hex("88888888"), front_area, transform, gfx);
 
-        if self.paused {
-            println!("FRONT_FILLS: {}, FOV: {}, view_distance: {}", FRONT_FILLS, FOV/PI*180.0, view_distance);
-            println!("front_viewable: {}, AREA: {:?}", front_viewable, AREA);
-            println!("front_frac: {}, front_offset: {}", front_frac, front_offset);
-            println!("back_viewable: {}", back_viewable);
-            println!("back_frac: {}, back_offset: {}", back_frac, back_offset);
-            self.paused = false;
-        }        
+        // if self.paused {
+        //     println!("FRONT_FILLS: {}, FOV: {}, view_distance: {}", FRONT_FILLS, FOV/PI*180.0, view_distance);
+        //     println!("front_viewable: {}, AREA: {:?}", front_viewable, AREA);
+        //     println!("front_frac: {}, front_offset: {}", front_frac, front_offset);
+        //     println!("back_viewable: {}", back_viewable);
+        //     println!("back_frac: {}, back_offset: {}", back_frac, back_offset);
+        //     self.paused = false;
+        // }        
     }
 
     fn update(&mut self, dt: f64) {
+        if self.paused {
+            return;
+        }
+        let moved = [self.ball_vel[0]*dt, self.ball_vel[1]*dt, self.ball_vel[2]*dt];
+        let mut pos = [self.ball_pos[0]+moved[0], self.ball_pos[1]+moved[1], self.ball_pos[2]+moved[2]];
+        if pos[2] < 0.0 || pos[2] > AREA[2] {
+            // game over, restart
+            self.ball_pos = [0.5, 0.5, 1.0];
+            // keep velocity, for fun
+            return;
+        }
+        if pos[0] < BALL_RADIUS {
+            self.ball_vel[0] *= -1.0;
+            pos[0] = BALL_RADIUS+(BALL_RADIUS-pos[0]);
+        } else if pos[0] > AREA[0]-BALL_RADIUS {
+            self.ball_vel[0] *= -1.0;
+            pos[0] = (AREA[0]-BALL_RADIUS)-(pos[0]-(AREA[0]-BALL_RADIUS));
+        }
+        if pos[1] < BALL_RADIUS {
+            self.ball_vel[1] *= -1.0;
+            pos[1] = BALL_RADIUS+(BALL_RADIUS-pos[1]);
+        } else if pos[1] > AREA[1]-BALL_RADIUS {
+            // println!("wrong: {}", (pos[1]-(AREA[1]-BALL_RADIUS)));
+            // println!("old: {:?}, {:?}", self.ball_vel, self.ball_pos);
+            self.ball_vel[1] *= -1.0;
+            pos[1] = (AREA[1]-BALL_RADIUS)-(pos[1]-(AREA[1]-BALL_RADIUS));
+            // println!("new: {:?}, {:?}", self.ball_vel, self.ball_pos);
+        }
 
+        fn within(pos: [f64; 3], racket_center: [f64; 2]) -> bool {
+            f64::abs(pos[0] - racket_center[0]) <= RACKET_SIZE[0] &&
+            f64::abs(pos[1] - racket_center[1]) <= RACKET_SIZE[1]
+        }
+        if pos[2] < BALL_RADIUS && within(pos, self.player_pos) {
+            self.ball_vel[2] *= -1.0;
+            pos[2] = BALL_RADIUS-(pos[2]-BALL_RADIUS);
+        } else if pos[2] > AREA[2]-BALL_RADIUS && within(pos, self.opponent_pos) {
+            self.ball_vel[2] *= -1.0;
+            pos[2] = (AREA[2]-BALL_RADIUS)-(pos[2]-(AREA[2]-BALL_RADIUS));
+        }
+        self.ball_pos = pos;
+        if pos[0] > 0.9 || pos[0] < 0.1 || pos[1] > 0.9 || pos[1] < 0.1 {
+            self.paused = true;
+            println!("vel: {:?}, pos: {:?}", self.ball_vel, self.ball_pos);
+        }
     }
 
-    fn mouse_move(&mut self,  pos: Option<[f64; 2]>) {
-
+    fn mouse_move(&mut self,  pos: [f64; 2]) {
+        let view_distance = AREA[0]/(2.0*FRONT_FILLS*f64::tan(FOV/2.0));
+        let front_viewable = 2.0*view_distance*f64::tan(FOV/2.0);
+        let movable_frac_x = (AREA[0]-RACKET_SIZE[0]/2.0) / front_viewable;
+        let movable_frac_y = (AREA[1]-RACKET_SIZE[1]/2.0) / front_viewable;
+        let movable_x = (0.5 - (movable_frac_x/2.0),  0.5 + (movable_frac_x/2.0));
+        let movable_y = (0.5 - (movable_frac_y/2.0),  0.5 + (movable_frac_y/2.0));
+        fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
+            if !(p >= min) {min}
+            else if !(p <= max) {max}
+            else {p}
+        }
+        self.player_pos = [clamp(pos[0], movable_x), clamp(pos[1], movable_y)];
     }
 
     fn mouse_press(&mut self,  button: MouseButton) {
-
+        println!("player pos: {:?}", self.player_pos);
     }
     fn mouse_release(&mut self,  button: MouseButton) {
 
@@ -174,7 +245,7 @@ impl Game {
 
     fn key_press(&mut self,  key: Key) {
         if key == Key::P {
-
+            self.paused = !self.paused;
         }
     }
 }
@@ -239,29 +310,19 @@ fn main() {
 
             Input::Resize(x,y) => {
                 changed = true;
-                let min = f64::min(x as f64 / INITIAL_SIZE[0],
-                                   y as f64 / INITIAL_SIZE[1]);
-                size = [INITIAL_SIZE[0]*min, INITIAL_SIZE[1]*min];
-                offset = [(x as f64 - size[0]) / 2.0,
-                          (y as f64 - size[1]) / 2.0];
-                gfx.viewport(0, 0, x as i32, y as i32);
+                // let min = f64::min(x as f64 / INITIAL_SIZE[0],
+                //                    y as f64 / INITIAL_SIZE[1]);
+                // size = [INITIAL_SIZE[0]*min, INITIAL_SIZE[1]*min];
+                // offset = [(x as f64 - size[0]) / 2.0,
+                //           (y as f64 - size[1]) / 2.0];
+                // gfx.viewport(0, 0, x as i32, y as i32);
             }
 
             Input::Press(Button::Keyboard(key)) => {
                 game.key_press(key);
             }
             Input::Move(Motion::MouseCursor(x,y)) => {
-                let mut pos: Option<[f64; 2]> = None;
-                let x = (x - offset[0]) / size[0];
-                let y = (y - offset[1]) / size[1];
-                if x >= 0.0  &&  x < 1.0
-                && y >= 0.0  &&  y < 1.0 {
-                    pos = Some([x*INITIAL_SIZE[0], y*INITIAL_SIZE[1]]);
-                }
-                game.mouse_move(pos);
-            }
-            Input::Cursor(_) => {//only happens if a button is pressed
-                game.mouse_move(None);
+                game.mouse_move([x/INITIAL_SIZE[0], y/INITIAL_SIZE[1]]);
             }
             _ => {}
         }
