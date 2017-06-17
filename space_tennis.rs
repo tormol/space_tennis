@@ -39,25 +39,29 @@ const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
 const UPDATE_TIME: f64 = 1.0/60.0;
 const AREA: [f64;3] = [1.0, 1.0, 2.0]; // 
 const BALL_RADIUS: f64 = 0.1;
-const RACKET_SIZE: [f64; 2] = [0.9, 0.6];
-const FOV: f64 = PI/2.0; // 90°
-const VIEW_DISTANCE: f64 = 0.8; // distance to arena
+const RACKET_SIZE: [f64; 2] = [0.22, 0.15];
+const FOV: f64 = PI/3.0; // 60°
+const FRONT_FILLS: f64 = 0.8; // of the screen
+//const BACK_FILLS: f64 = 0.3; // of the screen
+const WALL_LINES: u32 = 7;
+const LINE_WIDTH: f64 = 0.05;
+
 //const FONT_PATH: &'static str = "/usr/share/fonts/truetype/msttcorefonts/arial.ttf";
 //const FONT_RESOLUTION: f64 = 100.0;
 
 struct Game {
     ball_pos: [f64; 3],
     ball_vel: [f64; 3],
-    player_pos: [f64; 3],
-    opponent_pos: [f64; 3],
+    player_pos: [f64; 2],
+    opponent_pos: [f64; 2],
     paused: bool
 }
 impl Game {
     fn new() -> Self {Game {
-        player_pos: [0.0, 0.0, AREA[2]/2.0],
-        opponent_pos: [0.0, 0.0, -AREA[2]/2.0],
-        ball_vel: [0.0, 0.0, 0.1],
-        ball_pos: [0.0, 0.0, 0.0],
+        player_pos: [0.5, 0.5],
+        opponent_pos: [0.5, 0.5],
+        ball_vel: [0.0, 0.0, 0.2],
+        ball_pos: [0.5, 0.5, 1.0],
         paused: true
     } }
 
@@ -67,36 +71,90 @@ impl Game {
         at x dept the distance from top to bottom or left to right of view
         is 2*x*tan(fov/2). (hosliggende er 1, ikke hypotenusen)
         for now the aspect ratio is assumed to be 1:1, so horizontal and vertical FOV is equal.
-        */ 
+        */
+        // step 0: find view distance that satisfies FRONT_FILLS:
+        // at x distance the viewable area*FRONT_FILLS is AREA[0] =>
+        // 2*view_distance*tan(fov/2)*FRONT_FILLS=AREA[0]
+        let view_distance = AREA[0]/(2.0*FRONT_FILLS*f64::tan(FOV/2.0));
+
         // step 1: draw a rectangle that fills the view of the arena
         // i.e: render a centered cube at distance VIEW_DISTANCE with width and height 1
         // adjust width and height to fraction of view
         // view at VIEW_DISTANCE
-        let front_viewable = 2.0*VIEW_DISTANCE*f64::tan(FOV/2.0);
+        let front_viewable = 2.0*view_distance*f64::tan(FOV/2.0);
         let front_frac = AREA[0] / front_viewable;
-        let front_offset_min = 0.5 - (front_frac/2.0);
+        let front_offset = 0.5 - (front_frac/2.0);
         let front_size = front_frac;
-        let front_area = [front_offset_min, front_offset_min, front_size, front_size];
-        piston_window::rectangle(color::hex("aaaaaa"), front_area, transform, gfx);
-        if self.paused {
-            println!("VIEW_DISTANCE: {}, FOV: {}", VIEW_DISTANCE, FOV/PI*180.0);
-            println!("front_viewable: {}, AREA: {:?}", front_viewable, AREA);
-            println!("front_frac: {}, min: {}", front_frac, front_offset_min);
-            self.paused = false;
-        }
+        let front_area = [front_offset, front_offset, front_size, front_size];
+        piston_window::rectangle(color::hex("444444"), front_area, transform, gfx);
 
         // step 2: draw a rectangle that fills the back of the arena
         // i.e: render a centered cube at distance VIEW_DISTANCE with width and height 1
         // adjust width and height to fraction of view
         // view at VIEW_DISTANCE
-        let back_viewable = 2.0*(VIEW_DISTANCE+AREA[2])*f64::tan(FOV/2.0);
+        let back_viewable = 2.0*(view_distance+AREA[2])*f64::tan(FOV/2.0);
         let back_frac = AREA[0] / back_viewable;
-        let back_offset_min = 0.5 - (back_frac/2.0);
+        let back_offset = 0.5 - (back_frac/2.0);
         let back_size = back_frac;
-        let back_area = [back_offset_min, back_offset_min, back_size, back_size];
+        let back_area = [back_offset, back_offset, back_size, back_size];
         piston_window::rectangle(color::hex("000000"), back_area, transform, gfx);
 
-        
+        // step 3: draw lines
+        let interval = AREA[2]/(WALL_LINES+1) as f64;
+        let tgreen = color::hex("008800"); // terminal green
+        for depth in (0..(WALL_LINES+2)).map(|n| view_distance+interval*n as f64 ) {
+            let start_viewable = 2.0*(depth-LINE_WIDTH/2.0)*f64::tan(FOV/2.0);
+            let end_viewable = 2.0*(depth+LINE_WIDTH/2.0)*f64::tan(FOV/2.0);
+            let start_area_frac = AREA[0] / start_viewable;
+            let end_area_frac = AREA[0] / end_viewable;
+            let start_offset = (0.5 - (start_area_frac/2.0),  0.5 + (start_area_frac/2.0));
+            let end_offset = (0.5 - (end_area_frac/2.0),  0.5 + (end_area_frac/2.0));
+            let radius = (end_offset.0-start_offset.0) / 2.0;
+            let offset = (start_offset.0+radius, start_offset.1-radius);
+            // for simplicity the radius is calculated as if the lines potrude into the arena.
+            // ideally they should be painted on the wall; that requires finding the start and end depth,
+            // finding the thickness 
+            //let radius = (LINE_WIDTH/2.0) / viewable; // fixme should adjust for how much it covers
+            //let offset = (0.5 - (area_frac/2.0) - 2.0*radius,  0.5 + (area_frac/2.0) + 2.0*radius);
+            piston_window::line(tgreen, radius, [offset.0, offset.0-radius, offset.0, offset.1+radius], transform, gfx);
+            piston_window::line(tgreen, radius, [offset.0-radius, offset.0, offset.1+radius, offset.0], transform, gfx);
+            piston_window::line(tgreen, radius, [offset.0-radius, offset.1, offset.1+radius, offset.1], transform, gfx);
+            piston_window::line(tgreen, radius, [offset.1, offset.0-radius, offset.1, offset.1+radius], transform, gfx);
+        }
+
+        // step 4: opponent racket
+        let racket_color = color::hex("cccccccc");
+        let opponent_frac = (RACKET_SIZE[0] / back_viewable, RACKET_SIZE[1] / back_viewable);
+        let opponent_pos = (back_offset+self.opponent_pos[0]*back_frac, back_offset+self.opponent_pos[1]*back_frac);
+        let opponent_offset = (opponent_pos.0-opponent_frac.0/2.0, opponent_pos.1-opponent_frac.1/2.0);
+        let opponent_area = [opponent_offset.0, opponent_offset.1, opponent_frac.0, opponent_frac.1];
+        piston_window::rectangle(racket_color, opponent_area, transform, gfx);
+
+        // step 5: ball
+        let ball_color = color::hex("33ff33cc");
+        let ball_viewable = 2.0*(view_distance+self.ball_pos[2])*f64::tan(FOV/2.0);
+        let ball_depth_frac = (AREA[0]/ball_viewable, AREA[1]/ball_viewable);
+        let ball_offset = (0.5 - ball_depth_frac.0/2.0,  0.5 - ball_depth_frac.1/2.0);
+        let ball_pos = (ball_offset.0 + ball_depth_frac.0*self.ball_pos[0],  ball_offset.1 + ball_depth_frac.1*self.ball_pos[1]);
+        let ball_frac = BALL_RADIUS*2.0 / ball_viewable;
+        let ball_rect = [ball_pos.0-ball_frac/2.0, ball_pos.1-ball_frac/2.0, ball_frac, ball_frac];
+        piston_window::ellipse(ball_color, ball_rect, transform, gfx);
+
+        // step 6: opponent racket
+        let player_frac = (RACKET_SIZE[0] / front_viewable, RACKET_SIZE[1] / front_viewable);
+        let player_pos = (front_offset+self.player_pos[0]*front_frac, front_offset+self.player_pos[1]*front_frac);
+        let player_offset = (player_pos.0-player_frac.0/2.0, player_pos.1-player_frac.1/2.0);
+        let player_area = [player_offset.0, player_offset.1, player_frac.0, player_frac.1];
+        piston_window::rectangle(racket_color, player_area, transform, gfx);
+
+        if self.paused {
+            println!("FRONT_FILLS: {}, FOV: {}, view_distance: {}", FRONT_FILLS, FOV/PI*180.0, view_distance);
+            println!("front_viewable: {}, AREA: {:?}", front_viewable, AREA);
+            println!("front_frac: {}, front_offset: {}", front_frac, front_offset);
+            println!("back_viewable: {}", back_viewable);
+            println!("back_frac: {}, back_offset: {}", back_frac, back_offset);
+            self.paused = false;
+        }        
     }
 
     fn update(&mut self, dt: f64) {
