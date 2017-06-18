@@ -14,32 +14,22 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-use std::ops::Neg;
-extern crate num;
-use num::{Zero,One,ToPrimitive};
-extern crate vecmath;
-use vecmath::vec2_add; // Vector2 is [T; 2]
+use std::f64::consts::PI;
 extern crate piston_window;
 use piston_window::{Context,DrawState,Transformed,color,math}; // from piston2d-graphics
-use piston_window::types::Color; // from piston2d-graphics
-
-use std::f64::consts::PI;
-use std::collections::vec_deque::VecDeque;
- // from piston::input:
+// from piston::input:
 use piston_window::keyboard::Key;
 use piston_window::mouse::MouseButton;
 extern crate opengl_graphics;
 use opengl_graphics::GlGraphics;
-use opengl_graphics::glyph_cache::GlyphCache;
-extern crate rand;
-use rand::Rng;
 
 const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
 const UPDATE_TIME: f64 = 1.0/60.0;
 const AREA: [f64;3] = [1.0, 1.0, 2.0]; // 
 const BALL_RADIUS: f64 = 0.125; // exact representable
-const RACKET_SIZE: [f64; 2] = [0.22, 0.15];
-const RACKET_MAX_SPEED: [f64; 2] = [0.4, 0.4];
+const RACKET_SIZE: [f64;2] = [0.22, 0.15];
+const RACKET_BORDER_WIDTH: [f64;2] = [0.01, 0.004];
+const RACKET_MAX_SPEED: [f64;2] = [0.4, 0.4];
 const BRACKET_SPEED_TRANSFER: f64 = 0.75; // based on mass of ball and bracket
 const FOV: f64 = PI/3.0; // 60°
 const FRONT_FILLS: f64 = 0.8; // of the screen
@@ -90,10 +80,10 @@ impl Game {
         opponent_target: [0.5, 0.5],
         ball_vel: [0.0, 0.0, -0.4],
         ball_pos: [0.5, 0.5, 1.0],
-        paused: false
+        paused: true
     } }
 
-    fn render(&mut self,  draw_state: DrawState,  transform: math::Matrix2d,  gfx: &mut GlGraphics) {
+    fn render(&mut self,  _: DrawState,  transform: math::Matrix2d,  gfx: &mut GlGraphics) {
         /*
         at the center of the window there is a view cone with a certain angle (field of view)
         at x dept the distance from top to bottom or left to right of view
@@ -112,7 +102,6 @@ impl Game {
         let front_viewable = 2.0*view_distance*f64::tan(FOV/2.0);
         let front_frac = AREA[0] / front_viewable;
         let front_offset = 0.5 - (front_frac/2.0);
-        let front_area = [front_offset, front_offset, front_frac, front_frac];
 
         // step 2: draw a rectangle that fills the back of the arena
         // i.e: render a centered cube at distance VIEW_DISTANCE with width and height 1
@@ -121,7 +110,6 @@ impl Game {
         let back_viewable = 2.0*(view_distance+AREA[2])*f64::tan(FOV/2.0);
         let back_frac = AREA[0] / back_viewable;
         let back_offset = 0.5 - (back_frac/2.0);
-        let back_area = [back_offset, back_offset, back_frac, back_frac];
 
         fn draw_wall_marker(
                 color: &str,  depth: f64,  width: f64,
@@ -161,18 +149,40 @@ impl Game {
         }
         draw_wall_marker(WALL_LINE_COLOR, view_distance+AREA[2], LINE_WIDTH_EDGE, transform, gfx);
 
-        // fn draw_racket(pos: [f64;3]) {
-        //     let fill = color::hex(RACKET_COLOR);
-        //     let border = color::hex(RACKET_BORDER_COLOR);
-        //     let viewable = 
-        // }
-        // step 4: opponent racket
-        let racket_color = color::hex(RACKET_COLOR);
-        let opponent_frac = (RACKET_SIZE[0] / back_viewable, RACKET_SIZE[1] / back_viewable);
-        let opponent_pos = (back_offset+self.opponent_pos[0]*back_frac, back_offset+self.opponent_pos[1]*back_frac);
-        let opponent_offset = (opponent_pos.0-opponent_frac.0/2.0, opponent_pos.1-opponent_frac.1/2.0);
-        let opponent_area = [opponent_offset.0, opponent_offset.1, opponent_frac.0, opponent_frac.1];
-        piston_window::rectangle(racket_color, opponent_area, transform, gfx);
+        fn draw_racket(
+                pos: [f64;2]/*in arena*/, depth: f64/*from view*/,
+                transform: math::Matrix2d,  gfx: &mut GlGraphics,
+        ) {
+            let fill_color = color::hex(RACKET_COLOR);
+            let border_color = color::hex(RACKET_BORDER_COLOR);
+            let viewable = 2.0*depth*f64::tan(FOV/2.0);
+            let area_frac = [AREA[0]/viewable, AREA[1]/viewable];
+            let border_frac = [RACKET_BORDER_WIDTH[0]/viewable, RACKET_BORDER_WIDTH[1]/viewable];
+            let area_offset = [0.5-area_frac[0]/2.0, 0.5-area_frac[1]/2.0];
+            let racket_frac = [RACKET_SIZE[0]/viewable, RACKET_SIZE[1]/viewable];
+            let racket_pos = [area_offset[0]+area_frac[0]*pos[0], area_offset[1]+area_frac[1]*pos[1]];
+            let racket_offset = [racket_pos[0]-racket_frac[0]/2.0, racket_pos[1]-racket_frac[1]/2.0];
+            let fill_area = [
+                racket_pos[0]-racket_frac[0]/2.0+border_frac[0],
+                racket_pos[1]-racket_frac[1]/2.0+border_frac[1],
+                racket_frac[0]-2.0*border_frac[0],
+                racket_frac[1]-2.0*border_frac[1],
+            ];
+            piston_window::rectangle(fill_color, fill_area, transform, gfx);
+            let radius = [border_frac[0]/2.0, border_frac[1]/2.0];
+            let (left,top,right,bottom) = (
+                racket_pos[0]-racket_frac[0]/2.0+radius[0],
+                racket_pos[1]-racket_frac[1]/2.0+radius[1],
+                racket_pos[0]+racket_frac[0]/2.0-radius[0],
+                racket_pos[1]+racket_frac[1]/2.0-radius[1],
+            );
+            piston_window::line(border_color, radius[0], [left-radius[1], top, right-radius[1], top], transform, gfx);
+            piston_window::line(border_color, radius[1], [right, top-radius[0], right, bottom-radius[0]], transform, gfx);
+            piston_window::line(border_color, radius[0], [left+radius[1], bottom, right+radius[1], bottom], transform, gfx);
+            piston_window::line(border_color, radius[1], [left, top+radius[0], left, bottom+radius[0]], transform, gfx);
+        }
+        // opponent racket
+        draw_racket(self.opponent_pos, view_distance+AREA[2], transform, gfx);
 
         // step 5: ball
         draw_wall_marker(BALL_LINE_COLOR, view_distance+self.ball_pos[2], LINE_WIDTH, transform, gfx);
@@ -185,27 +195,14 @@ impl Game {
         let ball_rect = [ball_pos.0-ball_frac/2.0, ball_pos.1-ball_frac/2.0, ball_frac, ball_frac];
         piston_window::ellipse(ball_color, ball_rect, transform, gfx);
 
-        // step 6: player racket
-        let player_frac = (RACKET_SIZE[0] / front_viewable, RACKET_SIZE[1] / front_viewable);
-        let player_pos = (front_offset+self.player_pos[0]*front_frac, front_offset+self.player_pos[1]*front_frac);
-        let player_offset = (player_pos.0-player_frac.0/2.0, player_pos.1-player_frac.1/2.0);
-        let player_area = [player_offset.0, player_offset.1, player_frac.0, player_frac.1];
-        piston_window::rectangle(racket_color, player_area, transform, gfx);
+        // player racket
+        draw_racket(self.player_pos, view_distance, transform, gfx);
 
         // step 7: misses scoreboard
         let miss_color = color::hex(MISS_COLOR);
         for i in 0..self.player_misses {
             piston_window::ellipse(ball_color, ball_rect, transform, gfx);
         }
-
-        // if self.paused {
-        //     println!("FRONT_FILLS: {}, FOV: {}, view_distance: {}", FRONT_FILLS, FOV/PI*180.0, view_distance);
-        //     println!("front_viewable: {}, AREA: {:?}", front_viewable, AREA);
-        //     println!("front_frac: {}, front_offset: {}", front_frac, front_offset);
-        //     println!("back_viewable: {}", back_viewable);
-        //     println!("back_frac: {}, back_offset: {}", back_frac, back_offset);
-        //     self.paused = false;
-        // }        
     }
 
     fn opponent(&mut self) {
@@ -314,10 +311,10 @@ impl Game {
         self.player_target = [clamp(pos[0], movable_x), clamp(pos[1], movable_y)];
     }
 
-    fn mouse_press(&mut self,  button: MouseButton) {
-        println!("player pos: {:?}", self.player_pos);
+    fn mouse_press(&mut self,  _: MouseButton) {
+        self.paused = !self.paused;
     }
-    fn mouse_release(&mut self,  button: MouseButton) {
+    fn mouse_release(&mut self,  _: MouseButton) {
 
     }
 
@@ -334,8 +331,6 @@ use piston_window::draw_state::Blend; // from piston2d-graphics
 use piston_window::WindowSettings; // from piston::window
 use piston_window::Events; // from piston::event_loop
 use piston_window::PistonWindow; // from piston_window
-
-use std::time::Instant;
 
 fn main() {
     let window_size = [INITIAL_SIZE[0] as u32, INITIAL_SIZE[1] as u32];
@@ -399,6 +394,12 @@ fn main() {
 
             Input::Press(Button::Keyboard(key)) => {
                 game.key_press(key);
+            }
+            Input::Press(Button::Mouse(button)) => {
+                game.mouse_press(button);
+            }
+            Input::Release(Button::Mouse(button)) => {
+                game.mouse_release(button);
             }
             Input::Move(Motion::MouseCursor(x,y)) => {
                 game.mouse_move([x/INITIAL_SIZE[0], y/INITIAL_SIZE[1]]);
