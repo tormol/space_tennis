@@ -39,26 +39,40 @@ const UPDATE_TIME: f64 = 1.0/60.0;
 const AREA: [f64;3] = [1.0, 1.0, 2.0]; // 
 const BALL_RADIUS: f64 = 0.125; // exact representable
 const RACKET_SIZE: [f64; 2] = [0.22, 0.15];
+const RACKET_MAX_SPEED: [f64; 2] = [0.4, 0.4];
+const BRACKET_SPEED_TRANSFER: f64 = 0.75; // based on mass of ball and bracket
 const FOV: f64 = PI/3.0; // 60°
 const FRONT_FILLS: f64 = 0.8; // of the screen
 //const BACK_FILLS: f64 = 0.3; // of the screen
-const WALL_LINES: u32 = 7;
+const WALL_LINES: u32 = 5;
 const LINE_WIDTH: f64 = 0.05;
 
 //const FONT_PATH: &'static str = "/usr/share/fonts/truetype/msttcorefonts/arial.ttf";
 //const FONT_RESOLUTION: f64 = 100.0;
 
+fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
+         if p <= min   {min}
+    else if p >= max   {max}
+    else if p.is_nan() {(min+max)/2.0}
+    else               {p}
+}
+
+
 struct Game {
     ball_pos: [f64; 3],
     ball_vel: [f64; 3],
     player_pos: [f64; 2],
+    player_target: [f64; 2],
     opponent_pos: [f64; 2],
+    opponent_target: [f64; 2],
     paused: bool
 }
 impl Game {
     fn new() -> Self {Game {
         player_pos: [0.5, 0.5],
+        player_target: [0.5, 0.5],
         opponent_pos: [0.5, 0.5],
+        opponent_target: [0.5, 0.5],
         ball_vel: [0.2, 0.1, -0.4],
         ball_pos: [0.5, 0.5, 1.0],
         paused: false
@@ -157,7 +171,6 @@ impl Game {
         let player_offset = (player_pos.0-player_frac.0/2.0, player_pos.1-player_frac.1/2.0);
         let player_area = [player_offset.0, player_offset.1, player_frac.0, player_frac.1];
         piston_window::rectangle(racket_color, player_area, transform, gfx);
-        piston_window::rectangle(color::hex("88888888"), front_area, transform, gfx);
 
         // if self.paused {
         //     println!("FRONT_FILLS: {}, FOV: {}, view_distance: {}", FRONT_FILLS, FOV/PI*180.0, view_distance);
@@ -173,6 +186,20 @@ impl Game {
         if self.paused {
             return;
         }
+
+        // move rackets: be kind to the players and do that first
+        fn move_racket(racket: &mut[f64;2], target: &[f64;2], dt: f64) -> [f64;2] {
+            let max_move = [RACKET_MAX_SPEED[0]*dt, RACKET_MAX_SPEED[1]*dt];
+            let diff = [target[0]-racket[0], target[1]-racket[1]];
+            let move_x = clamp(diff[0], (-max_move[0], max_move[0]));
+            let move_y = clamp(diff[1], (-max_move[1], max_move[1]));
+            *racket = [racket[0]+move_x, racket[1]+move_y];
+            return [move_x/dt, move_y/dt];
+        }
+        let player_speed = move_racket(&mut self.player_pos, &self.player_target, dt);
+        let opponent_speed = move_racket(&mut self.opponent_pos, &self.opponent_target, dt);
+
+        // check boundaries and bounce / gameover
         let moved = [self.ball_vel[0]*dt, self.ball_vel[1]*dt, self.ball_vel[2]*dt];
         let mut pos = [self.ball_pos[0]+moved[0], self.ball_pos[1]+moved[1], self.ball_pos[2]+moved[2]];
         if pos[2] < 0.0 || pos[2] > AREA[2] {
@@ -204,9 +231,13 @@ impl Game {
             f64::abs(pos[1] - racket_center[1]) <= RACKET_SIZE[1]
         }
         if pos[2] < BALL_RADIUS && within(pos, self.player_pos) {
+            self.ball_vel[0] = player_speed[0]*BRACKET_SPEED_TRANSFER;
+            self.ball_vel[1] = player_speed[1]*BRACKET_SPEED_TRANSFER;
             self.ball_vel[2] *= -1.0;
             pos[2] = BALL_RADIUS-(pos[2]-BALL_RADIUS);
         } else if pos[2] > AREA[2]-BALL_RADIUS && within(pos, self.opponent_pos) {
+            self.ball_vel[0] = opponent_speed[0]*BRACKET_SPEED_TRANSFER;
+            self.ball_vel[1] = opponent_speed[1]*BRACKET_SPEED_TRANSFER;
             self.ball_vel[2] *= -1.0;
             pos[2] = (AREA[2]-BALL_RADIUS)-(pos[2]-(AREA[2]-BALL_RADIUS));
         }
@@ -225,12 +256,7 @@ impl Game {
         let pos = [(pos[0]-front_offset[0])/front_frac[0], (pos[1]-front_offset[1])/front_frac[1]];
         let movable_x = (RACKET_SIZE[0]/2.0, AREA[0]-RACKET_SIZE[0]/2.0);
         let movable_y = (RACKET_SIZE[1]/2.0, AREA[1]-RACKET_SIZE[1]/2.0);
-        fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
-            if !(p > min) {min}
-            else if !(p < max) {max}
-            else {p}
-        }
-        self.player_pos = [clamp(pos[0], movable_x), clamp(pos[1], movable_y)];
+        self.player_target = [clamp(pos[0], movable_x), clamp(pos[1], movable_y)];
     }
 
     fn mouse_press(&mut self,  button: MouseButton) {
