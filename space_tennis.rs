@@ -83,9 +83,7 @@ impl Game {
         let front_viewable = 2.0*view_distance*f64::tan(FOV/2.0);
         let front_frac = AREA[0] / front_viewable;
         let front_offset = 0.5 - (front_frac/2.0);
-        let front_size = front_frac;
-        let front_area = [front_offset, front_offset, front_size, front_size];
-        //piston_window::rectangle(color::hex("444444"), front_area, transform, gfx);
+        let front_area = [front_offset, front_offset, front_frac, front_frac];
 
         // step 2: draw a rectangle that fills the back of the arena
         // i.e: render a centered cube at distance VIEW_DISTANCE with width and height 1
@@ -94,9 +92,7 @@ impl Game {
         let back_viewable = 2.0*(view_distance+AREA[2])*f64::tan(FOV/2.0);
         let back_frac = AREA[0] / back_viewable;
         let back_offset = 0.5 - (back_frac/2.0);
-        let back_size = back_frac;
-        let back_area = [back_offset, back_offset, back_size, back_size];
-        //piston_window::rectangle(color::hex("000000"), back_area, transform, gfx);
+        let back_area = [back_offset, back_offset, back_frac, back_frac];
 
         fn draw_wall_marker(
                 color: [f32; 4],  depth: f64,  width: f64,
@@ -155,7 +151,7 @@ impl Game {
         let ball_rect = [ball_pos.0-ball_frac/2.0, ball_pos.1-ball_frac/2.0, ball_frac, ball_frac];
         piston_window::ellipse(ball_color, ball_rect, transform, gfx);
 
-        // step 6: opponent racket
+        // step 6: player racket
         let player_frac = (RACKET_SIZE[0] / front_viewable, RACKET_SIZE[1] / front_viewable);
         let player_pos = (front_offset+self.player_pos[0]*front_frac, front_offset+self.player_pos[1]*front_frac);
         let player_offset = (player_pos.0-player_frac.0/2.0, player_pos.1-player_frac.1/2.0);
@@ -224,13 +220,14 @@ impl Game {
     fn mouse_move(&mut self,  pos: [f64; 2]) {
         let view_distance = AREA[0]/(2.0*FRONT_FILLS*f64::tan(FOV/2.0));
         let front_viewable = 2.0*view_distance*f64::tan(FOV/2.0);
-        let movable_frac_x = (AREA[0]-RACKET_SIZE[0]/2.0) / front_viewable;
-        let movable_frac_y = (AREA[1]-RACKET_SIZE[1]/2.0) / front_viewable;
-        let movable_x = (0.5 - (movable_frac_x/2.0),  0.5 + (movable_frac_x/2.0));
-        let movable_y = (0.5 - (movable_frac_y/2.0),  0.5 + (movable_frac_y/2.0));
+        let front_frac = [AREA[0]/front_viewable, AREA[1]/front_viewable];
+        let front_offset = [0.5-front_frac[0]/2.0, 0.5-front_frac[1]/2.0];
+        let pos = [(pos[0]-front_offset[0])/front_frac[0], (pos[1]-front_offset[1])/front_frac[1]];
+        let movable_x = (RACKET_SIZE[0]/2.0, AREA[0]-RACKET_SIZE[0]/2.0);
+        let movable_y = (RACKET_SIZE[1]/2.0, AREA[1]-RACKET_SIZE[1]/2.0);
         fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
-            if !(p >= min) {min}
-            else if !(p <= max) {max}
+            if !(p > min) {min}
+            else if !(p < max) {max}
             else {p}
         }
         self.player_pos = [clamp(pos[0], movable_x), clamp(pos[1], movable_y)];
