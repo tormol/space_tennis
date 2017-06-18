@@ -27,6 +27,7 @@ const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
 const UPDATE_TIME: f64 = 1.0/60.0;
 const AREA: [f64;3] = [1.0, 1.0, 2.0]; // 
 const BALL_RADIUS: f64 = 0.125; // exact representable
+const MISS_BALL_RADIUS: f64 = 0.025;
 const RACKET_SIZE: [f64;2] = [0.22, 0.15];
 const RACKET_BORDER_WIDTH: [f64;2] = [0.01, 0.004];
 const RACKET_MAX_SPEED: [f64;2] = [0.4, 0.4];
@@ -37,7 +38,7 @@ const FRONT_FILLS: f64 = 0.8; // of the screen
 const WALL_LINES: u32 = 5;
 const LINE_WIDTH: f64 = 0.05;
 const LINE_WIDTH_EDGE: f64 = LINE_WIDTH*1.5;
-const BALL_ZSPEED_LEVEL_MULTIPLIER: f64 = 1.1;
+const BALL_ZSPEED_LEVEL_ADD: f64 = 0.125;
 
 const WALL_COLOR: &str = "444444";
 const WALL_LINE_COLOR: &str = "008800";
@@ -95,22 +96,6 @@ impl Game {
         // 2*view_distance*tan(fov/2)*FRONT_FILLS=AREA[0]
         let view_distance = AREA[0]/(2.0*FRONT_FILLS*f64::tan(FOV/2.0));
 
-        // step 1: draw a rectangle that fills the view of the arena
-        // i.e: render a centered cube at distance VIEW_DISTANCE with width and height 1
-        // adjust width and height to fraction of view
-        // view at VIEW_DISTANCE
-        let front_viewable = 2.0*view_distance*f64::tan(FOV/2.0);
-        let front_frac = AREA[0] / front_viewable;
-        let front_offset = 0.5 - (front_frac/2.0);
-
-        // step 2: draw a rectangle that fills the back of the arena
-        // i.e: render a centered cube at distance VIEW_DISTANCE with width and height 1
-        // adjust width and height to fraction of view
-        // view at VIEW_DISTANCE
-        let back_viewable = 2.0*(view_distance+AREA[2])*f64::tan(FOV/2.0);
-        let back_frac = AREA[0] / back_viewable;
-        let back_offset = 0.5 - (back_frac/2.0);
-
         fn draw_wall_marker(
                 color: &str,  depth: f64,  width: f64,
                 transform: math::Matrix2d,  gfx: &mut GlGraphics
@@ -161,7 +146,6 @@ impl Game {
             let area_offset = [0.5-area_frac[0]/2.0, 0.5-area_frac[1]/2.0];
             let racket_frac = [RACKET_SIZE[0]/viewable, RACKET_SIZE[1]/viewable];
             let racket_pos = [area_offset[0]+area_frac[0]*pos[0], area_offset[1]+area_frac[1]*pos[1]];
-            let racket_offset = [racket_pos[0]-racket_frac[0]/2.0, racket_pos[1]-racket_frac[1]/2.0];
             let fill_area = [
                 racket_pos[0]-racket_frac[0]/2.0+border_frac[0],
                 racket_pos[1]-racket_frac[1]/2.0+border_frac[1],
@@ -198,10 +182,21 @@ impl Game {
         // player racket
         draw_racket(self.player_pos, view_distance, transform, gfx);
 
-        // step 7: misses scoreboard
+        // misses
         let miss_color = color::hex(MISS_COLOR);
-        for i in 0..self.player_misses {
-            piston_window::ellipse(ball_color, ball_rect, transform, gfx);
+        let front_viewable = 2.0*view_distance*f64::tan(FOV/2.0);
+        let radius_frac = MISS_BALL_RADIUS/front_viewable;
+        let n_offset = 3.0*radius_frac;
+        let start_y = 0.5-(AREA[1]/front_viewable)/2.0;
+        let player_x = 0.5 + (AREA[0]/front_viewable)/2.0 + 2.0*radius_frac;
+        let opponent_x = 0.5 - (AREA[0]/front_viewable)/2.0 - 4.0*radius_frac;
+        for n in 0..self.player_misses {
+            let rect = [player_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
+            piston_window::ellipse(miss_color, rect, transform, gfx);
+        }
+        for n in 0..self.opponent_misses {
+            let rect = [opponent_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
+            piston_window::ellipse(miss_color, rect, transform, gfx);
         }
     }
 
@@ -248,7 +243,8 @@ impl Game {
         if pos[2] < 0.0 || pos[2] > AREA[2] {
             // game over, restart
             self.ball_pos = [0.5, 0.5, 1.0];
-            self.ball_vel = [0.0, 0.0, self.ball_vel[2]*BALL_ZSPEED_LEVEL_MULTIPLIER];
+            let z_speed = self.ball_vel[2];
+            self.ball_vel = [0.0, 0.0, z_speed+z_speed.signum()*BALL_ZSPEED_LEVEL_ADD];
             self.paused = true;
             if pos[2] < 0.0 {
                 self.player_misses += 1;
