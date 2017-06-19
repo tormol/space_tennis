@@ -17,11 +17,11 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::f64::consts::PI;
-extern crate piston_window;
-use piston_window::{Context,DrawState,Transformed,color,math}; // from piston2d-graphics
-use piston_window::mouse::MouseButton; // from piston::input
-extern crate opengl_graphics;
-use opengl_graphics::GlGraphics;
+extern crate deps;
+use deps::*;
+mod draw {
+    pub use deps::{clear, rectangle, line, ellipse};
+}
 
 const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
 const UPDATE_TIME: f64 = 1.0/60.0;
@@ -118,10 +118,10 @@ impl Game {
             let bottom = [offset_x.0+radius.0, offset_y.1, offset_x.1+radius.0, offset_y.1];
             let left   = [offset_x.0, offset_y.0+radius.1, offset_x.0, offset_y.1+radius.1];
             let right  = [offset_x.1, offset_y.0-radius.1, offset_x.1, offset_y.1-radius.1];
-            piston_window::line(color, radius.1, top, transform, gfx);
-            piston_window::line(color, radius.1, bottom, transform, gfx);
-            piston_window::line(color, radius.0, left, transform, gfx);
-            piston_window::line(color, radius.0, right, transform, gfx);
+            draw::line(color, radius.1, top, transform, gfx);
+            draw::line(color, radius.1, bottom, transform, gfx);
+            draw::line(color, radius.0, left, transform, gfx);
+            draw::line(color, radius.0, right, transform, gfx);
         }
         // draw the walls themselves
         draw_wall_marker(WALL_COLOR, view_distance+ARENA[2]/2.0, ARENA[2], transform, gfx);
@@ -151,7 +151,7 @@ impl Game {
                 racket_frac[0]-2.0*border_frac[0],
                 racket_frac[1]-2.0*border_frac[1],
             ];
-            piston_window::rectangle(fill_color, fill_area, transform, gfx);
+            draw::rectangle(fill_color, fill_area, transform, gfx);
             let radius = [border_frac[0]/2.0, border_frac[1]/2.0]; // [left/right, top/bottom]
             let (left,top,right,bottom) = (
                 racket_pos[0]-racket_frac[0]/2.0+radius[0],
@@ -159,10 +159,10 @@ impl Game {
                 racket_pos[0]+racket_frac[0]/2.0-radius[0],
                 racket_pos[1]+racket_frac[1]/2.0-radius[1],
             );
-            piston_window::line(border_color, radius[1], [left-radius[0], top, right-radius[0], top], transform, gfx);
-            piston_window::line(border_color, radius[0], [right, top-radius[1], right, bottom-radius[1]], transform, gfx);
-            piston_window::line(border_color, radius[1], [left+radius[0], bottom, right+radius[0], bottom], transform, gfx);
-            piston_window::line(border_color, radius[0], [left, top+radius[1], left, bottom+radius[1]], transform, gfx);
+            draw::line(border_color, radius[1], [left-radius[0], top, right-radius[0], top], transform, gfx);
+            draw::line(border_color, radius[0], [right, top-radius[1], right, bottom-radius[1]], transform, gfx);
+            draw::line(border_color, radius[1], [left+radius[0], bottom, right+radius[0], bottom], transform, gfx);
+            draw::line(border_color, radius[0], [left, top+radius[1], left, bottom+radius[1]], transform, gfx);
         }
         // opponent racket
         draw_racket(self.opponent_pos, view_distance+ARENA[2], transform, gfx);
@@ -176,7 +176,7 @@ impl Game {
         let ball_pos = (ball_offset.0 + ball_depth_frac.0*self.ball_pos[0],  ball_offset.1 + ball_depth_frac.1*self.ball_pos[1]);
         let ball_frac = BALL_RADIUS*2.0 / ball_viewable;
         let ball_rect = [ball_pos.0-ball_frac/2.0, ball_pos.1-ball_frac/2.0, ball_frac, ball_frac];
-        piston_window::ellipse(ball_color, ball_rect, transform, gfx);
+        draw::ellipse(ball_color, ball_rect, transform, gfx);
 
         // player racket
         draw_racket(self.player_pos, view_distance, transform, gfx);
@@ -191,11 +191,11 @@ impl Game {
         let opponent_x = 0.5 - (ARENA[0]/front_viewable)/2.0 - 4.0*radius_frac;
         for n in 0..self.player_misses {
             let rect = [player_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
-            piston_window::ellipse(miss_color, rect, transform, gfx);
+            draw::ellipse(miss_color, rect, transform, gfx);
         }
         for n in 0..self.opponent_misses {
             let rect = [opponent_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
-            piston_window::ellipse(miss_color, rect, transform, gfx);
+            draw::ellipse(miss_color, rect, transform, gfx);
         }
     }
 
@@ -333,13 +333,6 @@ impl Game {
     }
 }
 
-use opengl_graphics::OpenGL;
-use piston_window::{Input,Button,Motion,RenderArgs,UpdateArgs}; // from piston::input
-use piston_window::draw_state::Blend; // from piston2d-graphics
-use piston_window::WindowSettings; // from piston::window
-use piston_window::Events; // from piston::event_loop
-use piston_window::PistonWindow; // from piston_window
-
 fn main() {
     let window_size = [INITIAL_SIZE[0] as u32, INITIAL_SIZE[1] as u32];
     let mut window: PistonWindow = WindowSettings::new("space tennis", window_size)
@@ -370,7 +363,7 @@ fn main() {
                     //since colors are blended pixel for pixel, this has a performance cost,
                     //the alternative is to check for existing color in tile, and blend manually, or even statically
                     context.draw_state.blend(Blend::Alpha);
-                    piston_window::clear(color::BLACK, gfx);
+                    draw::clear(color::BLACK, gfx);
 
                     game.render(context.draw_state, context.transform, gfx);
                 });

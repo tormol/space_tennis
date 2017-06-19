@@ -1,8 +1,9 @@
 [root]
-name = "space_tennis"
+name = "deps"
 version = "0.0.0"
 dependencies = [
- "deps 0.0.0",
+ "piston2d-opengl_graphics 0.42.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "piston_window 0.64.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -144,14 +145,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "adler32 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "deps"
-version = "0.0.0"
-dependencies = [
- "piston2d-opengl_graphics 0.42.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "piston_window 0.64.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

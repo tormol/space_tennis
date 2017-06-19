@@ -8,8 +8,7 @@ name = "space_tennis"
 path = "space_tennis.rs"
 
 [dependencies]
-piston_window = "0.64"
-piston2d-opengl_graphics = "0.42"
+deps = {path="deps/"}
 
 [profile.release]
 lto = true

@@ -1,0 +1,21 @@
+[package]
+name = "deps"
+version = "0.0.0"
+authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
+
+[lib]
+name = "deps"
+path = "export.rs"
+crate-type = ["dylib"]
+
+[dependencies]
+piston_window = "0.64"
+piston2d-opengl_graphics = "0.42"
+
+[profile.dev]
+opt-level = 3
+# lto = true
+
+[profile.release]
+lto = true
+# debug = true
