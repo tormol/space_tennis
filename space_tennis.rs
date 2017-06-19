@@ -25,7 +25,7 @@ use opengl_graphics::GlGraphics;
 
 const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
 const UPDATE_TIME: f64 = 1.0/60.0;
-const AREA: [f64;3] = [1.0, 1.0, 2.0]; // 
+const ARENA: [f64;3] = [1.0, 1.0, 2.0]; // 
 const BALL_RADIUS: f64 = 0.125; // exact representable
 const MISS_BALL_RADIUS: f64 = 0.025;
 const RACKET_SIZE: [f64;2] = [0.22, 0.15];
@@ -88,9 +88,9 @@ impl Game {
         for now the aspect ratio is assumed to be 1:1, so horizontal and vertical FOV is equal.
         */
         // step 0: find view distance that satisfies FRONT_FILLS:
-        // at x distance the viewable area*FRONT_FILLS is AREA[0] =>
-        // 2*view_distance*tan(fov/2)*FRONT_FILLS=AREA[0]
-        let view_distance = AREA[0]/(2.0*FRONT_FILLS*f64::tan(FOV/2.0));
+        // at x distance the viewable area*FRONT_FILLS is ARENA[0] =>
+        // 2*view_distance*tan(fov/2)*FRONT_FILLS=ARENA[0]
+        let view_distance = ARENA[0]/(2.0*FRONT_FILLS*f64::tan(FOV/2.0));
 
         fn draw_wall_marker(
                 color: &str,  depth: f64,  width: f64,
@@ -102,8 +102,8 @@ impl Game {
             let color = color::hex(color);
             let near_viewable = 2.0*(depth-width/2.0)*f64::tan(FOV/2.0);
             let far_viewable = 2.0*(depth+width/2.0)*f64::tan(FOV/2.0);
-            let near_area_frac = (AREA[0]/near_viewable, AREA[1]/near_viewable);
-            let far_area_frac = (AREA[0]/far_viewable, AREA[1]/far_viewable);
+            let near_area_frac = (ARENA[0]/near_viewable, ARENA[1]/near_viewable);
+            let far_area_frac = (ARENA[0]/far_viewable, ARENA[1]/far_viewable);
             let near_topleft = (0.5 - (near_area_frac.0/2.0),  0.5 - (near_area_frac.1/2.0));
             let near_bottomright = (0.5 + (near_area_frac.0/2.0),  0.5 + (near_area_frac.1/2.0));
             let far_topleft = (0.5 - (far_area_frac.0/2.0),  0.5 - (far_area_frac.1/2.0));
@@ -121,14 +121,14 @@ impl Game {
             piston_window::line(color, radius.0, right, transform, gfx);
         }
         // draw the walls themselves
-        draw_wall_marker(WALL_COLOR, view_distance+AREA[2]/2.0, AREA[2], transform, gfx);
-        let interval = AREA[2]/(WALL_LINES+1) as f64;
+        draw_wall_marker(WALL_COLOR, view_distance+ARENA[2]/2.0, ARENA[2], transform, gfx);
+        let interval = ARENA[2]/(WALL_LINES+1) as f64;
         // the markers on the edges are thicker
         draw_wall_marker(WALL_LINE_COLOR, view_distance, LINE_WIDTH_EDGE, transform, gfx);
         for n in 1..(WALL_LINES+1) {
             draw_wall_marker(WALL_LINE_COLOR, view_distance + interval*n as f64, LINE_WIDTH, transform, gfx);
         }
-        draw_wall_marker(WALL_LINE_COLOR, view_distance+AREA[2], LINE_WIDTH_EDGE, transform, gfx);
+        draw_wall_marker(WALL_LINE_COLOR, view_distance+ARENA[2], LINE_WIDTH_EDGE, transform, gfx);
 
         fn draw_racket(
                 pos: [f64;2]/*in arena*/, depth: f64/*from view*/,
@@ -137,7 +137,7 @@ impl Game {
             let fill_color = color::hex(RACKET_COLOR);
             let border_color = color::hex(RACKET_BORDER_COLOR);
             let viewable = 2.0*depth*f64::tan(FOV/2.0);
-            let area_frac = [AREA[0]/viewable, AREA[1]/viewable];
+            let area_frac = [ARENA[0]/viewable, ARENA[1]/viewable];
             let border_frac = [RACKET_BORDER_WIDTH[0]/viewable, RACKET_BORDER_WIDTH[1]/viewable];
             let area_offset = [0.5-area_frac[0]/2.0, 0.5-area_frac[1]/2.0];
             let racket_frac = [RACKET_SIZE[0]/viewable, RACKET_SIZE[1]/viewable];
@@ -162,13 +162,13 @@ impl Game {
             piston_window::line(border_color, radius[0], [left, top+radius[1], left, bottom+radius[1]], transform, gfx);
         }
         // opponent racket
-        draw_racket(self.opponent_pos, view_distance+AREA[2], transform, gfx);
+        draw_racket(self.opponent_pos, view_distance+ARENA[2], transform, gfx);
 
         // step 5: ball
         draw_wall_marker(BALL_LINE_COLOR, view_distance+self.ball_pos[2], LINE_WIDTH, transform, gfx);
         let ball_color = color::hex(BALL_COLOR);
         let ball_viewable = 2.0*(view_distance+self.ball_pos[2])*f64::tan(FOV/2.0);
-        let ball_depth_frac = (AREA[0]/ball_viewable, AREA[1]/ball_viewable);
+        let ball_depth_frac = (ARENA[0]/ball_viewable, ARENA[1]/ball_viewable);
         let ball_offset = (0.5 - ball_depth_frac.0/2.0,  0.5 - ball_depth_frac.1/2.0);
         let ball_pos = (ball_offset.0 + ball_depth_frac.0*self.ball_pos[0],  ball_offset.1 + ball_depth_frac.1*self.ball_pos[1]);
         let ball_frac = BALL_RADIUS*2.0 / ball_viewable;
@@ -183,9 +183,9 @@ impl Game {
         let front_viewable = 2.0*view_distance*f64::tan(FOV/2.0);
         let radius_frac = MISS_BALL_RADIUS/front_viewable;
         let n_offset = 3.0*radius_frac;
-        let start_y = 0.5-(AREA[1]/front_viewable)/2.0;
-        let player_x = 0.5 + (AREA[0]/front_viewable)/2.0 + 2.0*radius_frac;
-        let opponent_x = 0.5 - (AREA[0]/front_viewable)/2.0 - 4.0*radius_frac;
+        let start_y = 0.5-(ARENA[1]/front_viewable)/2.0;
+        let player_x = 0.5 + (ARENA[0]/front_viewable)/2.0 + 2.0*radius_frac;
+        let opponent_x = 0.5 - (ARENA[0]/front_viewable)/2.0 - 4.0*radius_frac;
         for n in 0..self.player_misses {
             let rect = [player_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
             piston_window::ellipse(miss_color, rect, transform, gfx);
@@ -199,20 +199,20 @@ impl Game {
     fn opponent(&mut self) {
         // predict where ball will end up without walls, and do nothing if not within reach
         if self.ball_vel[2] <= 0.0 {// moving away
-            //self.opponent_target = [AREA[0]/2.0, AREA[1]/2.0];
+            //self.opponent_target = [ARENA[0]/2.0, ARENA[1]/2.0];
             return
         }
-        let dist = AREA[2]-BALL_RADIUS-self.ball_pos[2];
+        let dist = ARENA[2]-BALL_RADIUS-self.ball_pos[2];
         let time = dist / self.ball_vel[2];
         let moves = [self.ball_vel[0]*time, self.ball_vel[1]*time, dist];
-        let ends = [self.ball_pos[0]+moves[0], self.ball_pos[1]+moves[1], AREA[2]-BALL_RADIUS];
-        if ends[0] < BALL_RADIUS || ends[0] > AREA[0]-BALL_RADIUS
-        || ends[1] < BALL_RADIUS || ends[1] > AREA[1]-BALL_RADIUS {
-            //self.opponent_target = [AREA[0]/2.0, AREA[1]/2.0];
+        let ends = [self.ball_pos[0]+moves[0], self.ball_pos[1]+moves[1], ARENA[2]-BALL_RADIUS];
+        if ends[0] < BALL_RADIUS || ends[0] > ARENA[0]-BALL_RADIUS
+        || ends[1] < BALL_RADIUS || ends[1] > ARENA[1]-BALL_RADIUS {
+            //self.opponent_target = [ARENA[0]/2.0, ARENA[1]/2.0];
             return
         }
-        let target_x = clamp(ends[0], (RACKET_SIZE[0]/2.0, AREA[0]-RACKET_SIZE[0]/2.0));
-        let target_y = clamp(ends[1], (RACKET_SIZE[1]/2.0, AREA[1]-RACKET_SIZE[1]/2.0));
+        let target_x = clamp(ends[0], (RACKET_SIZE[0]/2.0, ARENA[0]-RACKET_SIZE[0]/2.0));
+        let target_y = clamp(ends[1], (RACKET_SIZE[1]/2.0, ARENA[1]-RACKET_SIZE[1]/2.0));
         self.opponent_target = [target_x, target_y];
     }
 
@@ -236,7 +236,7 @@ impl Game {
         // check boundaries and bounce / gameover
         let moved = [self.ball_vel[0]*dt, self.ball_vel[1]*dt, self.ball_vel[2]*dt];
         let mut pos = [self.ball_pos[0]+moved[0], self.ball_pos[1]+moved[1], self.ball_pos[2]+moved[2]];
-        if pos[2] < 0.0 || pos[2] > AREA[2] {
+        if pos[2] < 0.0 || pos[2] > ARENA[2] {
             // game over, restart
             self.ball_pos = [0.5, 0.5, 1.0];
             let z_speed = self.ball_vel[2];
@@ -252,18 +252,18 @@ impl Game {
         if pos[0] < BALL_RADIUS {
             self.ball_vel[0] *= -1.0;
             pos[0] = BALL_RADIUS+(BALL_RADIUS-pos[0]);
-        } else if pos[0] > AREA[0]-BALL_RADIUS {
+        } else if pos[0] > ARENA[0]-BALL_RADIUS {
             self.ball_vel[0] *= -1.0;
-            pos[0] = (AREA[0]-BALL_RADIUS)-(pos[0]-(AREA[0]-BALL_RADIUS));
+            pos[0] = (ARENA[0]-BALL_RADIUS)-(pos[0]-(ARENA[0]-BALL_RADIUS));
         }
         if pos[1] < BALL_RADIUS {
             self.ball_vel[1] *= -1.0;
             pos[1] = BALL_RADIUS+(BALL_RADIUS-pos[1]);
-        } else if pos[1] > AREA[1]-BALL_RADIUS {
-            // println!("wrong: {}", (pos[1]-(AREA[1]-BALL_RADIUS)));
+        } else if pos[1] > ARENA[1]-BALL_RADIUS {
+            // println!("wrong: {}", (pos[1]-(ARENA[1]-BALL_RADIUS)));
             // println!("old: {:?}, {:?}", self.ball_vel, self.ball_pos);
             self.ball_vel[1] *= -1.0;
-            pos[1] = (AREA[1]-BALL_RADIUS)-(pos[1]-(AREA[1]-BALL_RADIUS));
+            pos[1] = (ARENA[1]-BALL_RADIUS)-(pos[1]-(ARENA[1]-BALL_RADIUS));
             // println!("new: {:?}, {:?}", self.ball_vel, self.ball_pos);
         }
 
@@ -276,11 +276,11 @@ impl Game {
             self.ball_vel[1] += player_speed[1]*BRACKET_SPEED_TRANSFER;
             self.ball_vel[2] *= -1.0;
             pos[2] = BALL_RADIUS-(pos[2]-BALL_RADIUS);
-        } else if pos[2] > AREA[2]-BALL_RADIUS && within(pos, self.opponent_pos) {
+        } else if pos[2] > ARENA[2]-BALL_RADIUS && within(pos, self.opponent_pos) {
             self.ball_vel[0] += opponent_speed[0]*BRACKET_SPEED_TRANSFER;
             self.ball_vel[1] += opponent_speed[1]*BRACKET_SPEED_TRANSFER;
             self.ball_vel[2] *= -1.0;
-            pos[2] = (AREA[2]-BALL_RADIUS)-(pos[2]-(AREA[2]-BALL_RADIUS));
+            pos[2] = (ARENA[2]-BALL_RADIUS)-(pos[2]-(ARENA[2]-BALL_RADIUS));
         }
         self.ball_pos = pos;
         if pos[0] > 0.9 || pos[0] < 0.1 || pos[1] > 0.9 || pos[1] < 0.1 {
@@ -293,13 +293,13 @@ impl Game {
     }
 
     fn mouse_move(&mut self,  pos: [f64; 2]) {
-        let view_distance = AREA[0]/(2.0*FRONT_FILLS*f64::tan(FOV/2.0));
+        let view_distance = ARENA[0]/(2.0*FRONT_FILLS*f64::tan(FOV/2.0));
         let front_viewable = 2.0*view_distance*f64::tan(FOV/2.0);
-        let front_frac = [AREA[0]/front_viewable, AREA[1]/front_viewable];
+        let front_frac = [ARENA[0]/front_viewable, ARENA[1]/front_viewable];
         let front_offset = [0.5-front_frac[0]/2.0, 0.5-front_frac[1]/2.0];
         let pos = [(pos[0]-front_offset[0])/front_frac[0], (pos[1]-front_offset[1])/front_frac[1]];
-        let movable_x = (RACKET_SIZE[0]/2.0, AREA[0]-RACKET_SIZE[0]/2.0);
-        let movable_y = (RACKET_SIZE[1]/2.0, AREA[1]-RACKET_SIZE[1]/2.0);
+        let movable_x = (RACKET_SIZE[0]/2.0, ARENA[0]-RACKET_SIZE[0]/2.0);
+        let movable_y = (RACKET_SIZE[1]/2.0, ARENA[1]-RACKET_SIZE[1]/2.0);
         self.player_target = [clamp(pos[0], movable_x), clamp(pos[1], movable_y)];
     }
 
