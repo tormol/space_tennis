@@ -30,6 +30,7 @@ const BALL_RADIUS: f64 = 0.125; // exact representable
 const MISS_BALL_RADIUS: f64 = 0.025;
 const RACKET_SIZE: [f64;2] = [0.22, 0.15];
 const RACKET_MAX_SPEED: [f64;2] = [0.4, 0.4];
+const BALL_START_ZSPEED: f64 = 0.4;
 const BALL_ZSPEED_LEVEL_ADD: f64 = 0.125;
 const BRACKET_SPEED_TRANSFER: f64 = 0.75; // based on mass of ball and bracket
 const FOV: f64 = PI/3.0; // 60°
@@ -55,6 +56,8 @@ fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
     else               {p}
 }
 
+#[derive(Clone,Copy, PartialEq,Eq)]
+enum State {Playing, Paused, PlayerStart, OpponentStart}
 
 struct Game {
     ball_pos: [f64; 3],
@@ -65,19 +68,19 @@ struct Game {
     opponent_pos: [f64; 2],
     opponent_target: [f64; 2],
     opponent_misses: u32,
-    paused: bool
+    state: State
 }
 impl Game {
     fn new() -> Self {Game {
         player_misses: 0,
         opponent_misses: 0,
-        player_pos: [0.5, 0.5],
-        player_target: [0.5, 0.5],
-        opponent_pos: [0.5, 0.5],
-        opponent_target: [0.5, 0.5],
-        ball_vel: [0.0, 0.0, -0.4],
-        ball_pos: [0.5, 0.5, 1.0],
-        paused: true
+        player_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
+        player_target: [ARENA[0]/2.0, ARENA[1]/2.0],
+        opponent_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
+        opponent_target: [ARENA[0]/2.0, ARENA[1]/2.0],
+        ball_vel: [0.0, 0.0, BALL_START_ZSPEED],
+        ball_pos: [ARENA[0]/2.0, ARENA[1]/2.0, BALL_RADIUS],// at player
+        state: State::PlayerStart
     } }
 
     fn render(&mut self,  _: DrawState,  transform: math::Matrix2d,  gfx: &mut GlGraphics) {
@@ -197,6 +200,12 @@ impl Game {
     }
 
     fn opponent(&mut self) {
+        if self.state == State::OpponentStart {
+            self.opponent_target = [ARENA[0]/2.0, ARENA[1]/2.0];
+            self.state = State::Playing;
+            return;
+        }
+
         // predict where ball will end up without walls, and do nothing if not within reach
         if self.ball_vel[2] <= 0.0 {// moving away
             //self.opponent_target = [ARENA[0]/2.0, ARENA[1]/2.0];
@@ -217,7 +226,7 @@ impl Game {
     }
 
     fn update(&mut self, dt: f64) {
-        if self.paused {
+        if self.state == State::Paused {
             return;
         }
 
@@ -233,59 +242,71 @@ impl Game {
         let player_speed = move_racket(&mut self.player_pos, &self.player_target, dt);
         let opponent_speed = move_racket(&mut self.opponent_pos, &self.opponent_target, dt);
 
-        // check boundaries and bounce / gameover
-        let moved = [self.ball_vel[0]*dt, self.ball_vel[1]*dt, self.ball_vel[2]*dt];
-        let mut pos = [self.ball_pos[0]+moved[0], self.ball_pos[1]+moved[1], self.ball_pos[2]+moved[2]];
-        if pos[2] < 0.0 || pos[2] > ARENA[2] {
-            // game over, restart
-            self.ball_pos = [0.5, 0.5, 1.0];
-            let z_speed = self.ball_vel[2];
-            self.ball_vel = [0.0, 0.0, z_speed+z_speed.signum()*BALL_ZSPEED_LEVEL_ADD];
-            self.paused = true;
+        if self.state == State::PlayerStart {
+            self.ball_pos = [self.player_pos[0], self.player_pos[1], BALL_RADIUS];
+            // no loss of speed because it was following the racket without delay
+            self.ball_vel = [player_speed[0], player_speed[1], self.ball_vel[2]];
+        } else if self.state == State::OpponentStart {
+            self.ball_pos = [self.opponent_pos[0], self.opponent_pos[1], ARENA[2]-BALL_RADIUS];
+            self.ball_vel = [opponent_speed[0], opponent_speed[1], self.ball_vel[2]];
+        } else if self.state == State::Playing {
+            // check boundaries and bounce / gameover
+            let moved = [self.ball_vel[0]*dt, self.ball_vel[1]*dt, self.ball_vel[2]*dt];
+            let mut pos = [self.ball_pos[0]+moved[0], self.ball_pos[1]+moved[1], self.ball_pos[2]+moved[2]];
             if pos[2] < 0.0 {
+                // game over, restart
                 self.player_misses += 1;
-            } else {
+                self.ball_pos = [self.player_pos[0], self.player_pos[1], BALL_RADIUS];
+                let z_speed = self.ball_vel[2];
+                self.ball_vel = [0.0, 0.0, -z_speed+BALL_ZSPEED_LEVEL_ADD];
+                self.state = State::PlayerStart;
+                return;
+            } else if pos[2] > ARENA[2] {
                 self.opponent_misses += 1;
+                self.ball_pos = [self.opponent_pos[0], self.opponent_pos[1], ARENA[2]-BALL_RADIUS];
+                let z_speed = self.ball_vel[2];
+                self.ball_vel = [0.0, 0.0, -z_speed-BALL_ZSPEED_LEVEL_ADD];
+                self.state = State::OpponentStart;
+                return;
             }
-            return;
-        }
-        if pos[0] < BALL_RADIUS {
-            self.ball_vel[0] *= -1.0;
-            pos[0] = BALL_RADIUS+(BALL_RADIUS-pos[0]);
-        } else if pos[0] > ARENA[0]-BALL_RADIUS {
-            self.ball_vel[0] *= -1.0;
-            pos[0] = (ARENA[0]-BALL_RADIUS)-(pos[0]-(ARENA[0]-BALL_RADIUS));
-        }
-        if pos[1] < BALL_RADIUS {
-            self.ball_vel[1] *= -1.0;
-            pos[1] = BALL_RADIUS+(BALL_RADIUS-pos[1]);
-        } else if pos[1] > ARENA[1]-BALL_RADIUS {
-            // println!("wrong: {}", (pos[1]-(ARENA[1]-BALL_RADIUS)));
-            // println!("old: {:?}, {:?}", self.ball_vel, self.ball_pos);
-            self.ball_vel[1] *= -1.0;
-            pos[1] = (ARENA[1]-BALL_RADIUS)-(pos[1]-(ARENA[1]-BALL_RADIUS));
-            // println!("new: {:?}, {:?}", self.ball_vel, self.ball_pos);
-        }
+            if pos[0] < BALL_RADIUS {
+                self.ball_vel[0] *= -1.0;
+                pos[0] = BALL_RADIUS+(BALL_RADIUS-pos[0]);
+            } else if pos[0] > ARENA[0]-BALL_RADIUS {
+                self.ball_vel[0] *= -1.0;
+                pos[0] = (ARENA[0]-BALL_RADIUS)-(pos[0]-(ARENA[0]-BALL_RADIUS));
+            }
+            if pos[1] < BALL_RADIUS {
+                self.ball_vel[1] *= -1.0;
+                pos[1] = BALL_RADIUS+(BALL_RADIUS-pos[1]);
+            } else if pos[1] > ARENA[1]-BALL_RADIUS {
+                // println!("wrong: {}", (pos[1]-(ARENA[1]-BALL_RADIUS)));
+                // println!("old: {:?}, {:?}", self.ball_vel, self.ball_pos);
+                self.ball_vel[1] *= -1.0;
+                pos[1] = (ARENA[1]-BALL_RADIUS)-(pos[1]-(ARENA[1]-BALL_RADIUS));
+                // println!("new: {:?}, {:?}", self.ball_vel, self.ball_pos);
+            }
 
-        fn within(pos: [f64; 3], racket_center: [f64; 2]) -> bool {
-            f64::abs(pos[0] - racket_center[0]) <= RACKET_SIZE[0] &&
-            f64::abs(pos[1] - racket_center[1]) <= RACKET_SIZE[1]
-        }
-        if pos[2] < BALL_RADIUS && within(pos, self.player_pos) {
-            self.ball_vel[0] += player_speed[0]*BRACKET_SPEED_TRANSFER;
-            self.ball_vel[1] += player_speed[1]*BRACKET_SPEED_TRANSFER;
-            self.ball_vel[2] *= -1.0;
-            pos[2] = BALL_RADIUS-(pos[2]-BALL_RADIUS);
-        } else if pos[2] > ARENA[2]-BALL_RADIUS && within(pos, self.opponent_pos) {
-            self.ball_vel[0] += opponent_speed[0]*BRACKET_SPEED_TRANSFER;
-            self.ball_vel[1] += opponent_speed[1]*BRACKET_SPEED_TRANSFER;
-            self.ball_vel[2] *= -1.0;
-            pos[2] = (ARENA[2]-BALL_RADIUS)-(pos[2]-(ARENA[2]-BALL_RADIUS));
-        }
-        self.ball_pos = pos;
-        if pos[0] > 0.9 || pos[0] < 0.1 || pos[1] > 0.9 || pos[1] < 0.1 {
-            self.paused = true;
-            println!("vel: {:?}, pos: {:?}", self.ball_vel, self.ball_pos);
+            fn within(pos: [f64; 3], racket_center: [f64; 2]) -> bool {
+                f64::abs(pos[0] - racket_center[0]) <= RACKET_SIZE[0] &&
+                f64::abs(pos[1] - racket_center[1]) <= RACKET_SIZE[1]
+            }
+            if pos[2] < BALL_RADIUS && within(pos, self.player_pos) {
+                self.ball_vel[0] += player_speed[0]*BRACKET_SPEED_TRANSFER;
+                self.ball_vel[1] += player_speed[1]*BRACKET_SPEED_TRANSFER;
+                self.ball_vel[2] *= -1.0;
+                pos[2] = BALL_RADIUS-(pos[2]-BALL_RADIUS);
+            } else if pos[2] > ARENA[2]-BALL_RADIUS && within(pos, self.opponent_pos) {
+                self.ball_vel[0] += opponent_speed[0]*BRACKET_SPEED_TRANSFER;
+                self.ball_vel[1] += opponent_speed[1]*BRACKET_SPEED_TRANSFER;
+                self.ball_vel[2] *= -1.0;
+                pos[2] = (ARENA[2]-BALL_RADIUS)-(pos[2]-(ARENA[2]-BALL_RADIUS));
+            }
+            self.ball_pos = pos;
+            if pos[0] > 0.9 || pos[0] < 0.1 || pos[1] > 0.9 || pos[1] < 0.1 {
+                self.state = State::Paused;
+                println!("vel: {:?}, pos: {:?}", self.ball_vel, self.ball_pos);
+            }
         }
 
         // move opponent
@@ -304,7 +325,11 @@ impl Game {
     }
 
     fn mouse_press(&mut self,  _: MouseButton) {
-        self.paused = !self.paused;
+        if self.state == State::Paused  ||  self.state == State::PlayerStart {
+            self.state = State::Playing;
+        } else {
+            self.state = State::Paused;
+        }
     }
 }
 
