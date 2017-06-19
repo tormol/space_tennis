@@ -4,12 +4,13 @@ version = "0.0.0"
 authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
 
 [[bin]]
-name = "SpaceTennis"
+name = "space_tennis"
 path = "space_tennis.rs"
 
 [dependencies]
 piston_window = "0.64"
 piston2d-opengl_graphics = "0.42"
-vecmath = "0.3"
-num = "0.1.39"
-rand = "0.3.15"
+
+[profile.release]
+lto = true
+# debug = true

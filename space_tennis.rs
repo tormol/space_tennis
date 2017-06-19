@@ -14,12 +14,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use std::f64::consts::PI;
 extern crate piston_window;
 use piston_window::{Context,DrawState,Transformed,color,math}; // from piston2d-graphics
-// from piston::input:
-use piston_window::keyboard::Key;
-use piston_window::mouse::MouseButton;
+use piston_window::mouse::MouseButton; // from piston::input
 extern crate opengl_graphics;
 use opengl_graphics::GlGraphics;
 
@@ -29,28 +29,24 @@ const AREA: [f64;3] = [1.0, 1.0, 2.0]; //
 const BALL_RADIUS: f64 = 0.125; // exact representable
 const MISS_BALL_RADIUS: f64 = 0.025;
 const RACKET_SIZE: [f64;2] = [0.22, 0.15];
-const RACKET_BORDER_WIDTH: [f64;2] = [0.01, 0.004];
 const RACKET_MAX_SPEED: [f64;2] = [0.4, 0.4];
+const BALL_ZSPEED_LEVEL_ADD: f64 = 0.125;
 const BRACKET_SPEED_TRANSFER: f64 = 0.75; // based on mass of ball and bracket
 const FOV: f64 = PI/3.0; // 60°
 const FRONT_FILLS: f64 = 0.8; // of the screen
 //const BACK_FILLS: f64 = 0.3; // of the screen
+
+const WALL_COLOR: &str = "222222";
+const WALL_LINE_COLOR: &str = "008800";
 const WALL_LINES: u32 = 5;
 const LINE_WIDTH: f64 = 0.05;
 const LINE_WIDTH_EDGE: f64 = LINE_WIDTH*1.5;
-const BALL_ZSPEED_LEVEL_ADD: f64 = 0.125;
-
-const WALL_COLOR: &str = "444444";
-const WALL_LINE_COLOR: &str = "008800";
 const RACKET_COLOR: &str = "ddddddaa";
 const RACKET_BORDER_COLOR: &str = "5555dd";
-const BALL_COLOR: &str = "33ff33cc";
+const RACKET_BORDER_WIDTH: [f64;2] = [0.01333, 0.00666]; // [left/right, top/bottom]
+const BALL_COLOR: &str = "aaff55ee";
 const BALL_LINE_COLOR: &str = "eeeeee88";
 const MISS_COLOR: &str = "ff3333";
-
-
-//const FONT_PATH: &'static str = "/usr/share/fonts/truetype/msttcorefonts/arial.ttf";
-//const FONT_RESOLUTION: f64 = 100.0;
 
 fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
          if p <= min   {min}
@@ -153,17 +149,17 @@ impl Game {
                 racket_frac[1]-2.0*border_frac[1],
             ];
             piston_window::rectangle(fill_color, fill_area, transform, gfx);
-            let radius = [border_frac[0]/2.0, border_frac[1]/2.0];
+            let radius = [border_frac[0]/2.0, border_frac[1]/2.0]; // [left/right, top/bottom]
             let (left,top,right,bottom) = (
                 racket_pos[0]-racket_frac[0]/2.0+radius[0],
                 racket_pos[1]-racket_frac[1]/2.0+radius[1],
                 racket_pos[0]+racket_frac[0]/2.0-radius[0],
                 racket_pos[1]+racket_frac[1]/2.0-radius[1],
             );
-            piston_window::line(border_color, radius[0], [left-radius[1], top, right-radius[1], top], transform, gfx);
-            piston_window::line(border_color, radius[1], [right, top-radius[0], right, bottom-radius[0]], transform, gfx);
-            piston_window::line(border_color, radius[0], [left+radius[1], bottom, right+radius[1], bottom], transform, gfx);
-            piston_window::line(border_color, radius[1], [left, top+radius[0], left, bottom+radius[0]], transform, gfx);
+            piston_window::line(border_color, radius[1], [left-radius[0], top, right-radius[0], top], transform, gfx);
+            piston_window::line(border_color, radius[0], [right, top-radius[1], right, bottom-radius[1]], transform, gfx);
+            piston_window::line(border_color, radius[1], [left+radius[0], bottom, right+radius[0], bottom], transform, gfx);
+            piston_window::line(border_color, radius[0], [left, top+radius[1], left, bottom+radius[1]], transform, gfx);
         }
         // opponent racket
         draw_racket(self.opponent_pos, view_distance+AREA[2], transform, gfx);
@@ -310,15 +306,6 @@ impl Game {
     fn mouse_press(&mut self,  _: MouseButton) {
         self.paused = !self.paused;
     }
-    fn mouse_release(&mut self,  _: MouseButton) {
-
-    }
-
-    fn key_press(&mut self,  key: Key) {
-        if key == Key::P {
-            self.paused = !self.paused;
-        }
-    }
 }
 
 use opengl_graphics::OpenGL;
@@ -331,19 +318,16 @@ use piston_window::PistonWindow; // from piston_window
 fn main() {
     let window_size = [INITIAL_SIZE[0] as u32, INITIAL_SIZE[1] as u32];
     let mut window: PistonWindow = WindowSettings::new("space tennis", window_size)
-        .exit_on_esc(true)
         .vsync(true)
         .opengl(OpenGL::V3_2)
         .build()
         .unwrap();
     let mut gfx = GlGraphics::new(OpenGL::V3_2);
 
-    let mut size = INITIAL_SIZE;//changes if window is resized
-    let mut offset = [0.0; 2];//letterboxing after resize
+    let mut size = INITIAL_SIZE; // changes if window is resized
 
     let mut game = Game::new();
     let mut event_loop: Events = window.events;
-    let mut changed = true;
     while let Some(e) = event_loop.next(&mut window) {
         match e {
             Input::Render(render_args/*: RenderArgs*/) => {
@@ -354,15 +338,8 @@ fn main() {
                 gfx.draw(render_args.viewport(), |context, gfx| {
                     let context: Context = context;
                     let gfx: &mut GlGraphics = gfx; // the same instance as outside
-                    if changed {
-                        let v = render_args.viewport();
-                        println!("{:?} {:?} {:?}", v.rect, v.draw_size, v.window_size);
-                        changed = false;
-                    }
                     size = context.get_view_size();
                     let context = context.scale(size[0], size[1]);
-                    // let vds = render_args.viewport().draw_size;
-                    // println!("gvs: {:?}, view: {:?}, transform {:?}", context.get_view_size(), context.view, context.transform);
 
                     //by default alpha blending is disabled, which means all semi-transparent colors are considered opaque.
                     //since colors are blended pixel for pixel, this has a performance cost,
@@ -378,27 +355,11 @@ fn main() {
                 game.update(update_args.dt);// deltatime is its only field
             }
 
-            Input::Resize(x,y) => {
-                changed = true;
-                // let min = f64::min(x as f64 / INITIAL_SIZE[0],
-                //                    y as f64 / INITIAL_SIZE[1]);
-                // size = [INITIAL_SIZE[0]*min, INITIAL_SIZE[1]*min];
-                // offset = [(x as f64 - size[0]) / 2.0,
-                //           (y as f64 - size[1]) / 2.0];
-                // gfx.viewport(0, 0, x as i32, y as i32);
-            }
-
-            Input::Press(Button::Keyboard(key)) => {
-                game.key_press(key);
-            }
             Input::Press(Button::Mouse(button)) => {
                 game.mouse_press(button);
             }
-            Input::Release(Button::Mouse(button)) => {
-                game.mouse_release(button);
-            }
             Input::Move(Motion::MouseCursor(x,y)) => {
-                game.mouse_move([x/INITIAL_SIZE[0], y/INITIAL_SIZE[1]]);
+                game.mouse_move([x/size[0], y/size[1]]);
             }
             _ => {}
         }
