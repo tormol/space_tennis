@@ -29,7 +29,8 @@ const ARENA: [f64;3] = [1.0, 1.0, 2.0]; //
 const BALL_RADIUS: f64 = 0.125; // exact representable
 const MISS_BALL_RADIUS: f64 = 0.025;
 const RACKET_SIZE: [f64;2] = [0.22, 0.15];
-const RACKET_MAX_SPEED: [f64;2] = [0.4, 0.4];
+const PLAYER_MAX_SPEED: [f64;2] = [0.9, 0.9];
+const OPPONENT_MAX_SPEED: [f64;2] = [0.4, 0.4];
 const BALL_START_ZSPEED: f64 = 0.4;
 const BALL_ZSPEED_LEVEL_ADD: f64 = 0.125;
 const BRACKET_SPEED_TRANSFER: f64 = 0.75; // based on mass of ball and bracket
@@ -231,16 +232,16 @@ impl Game {
         }
 
         // move rackets: be kind to the players and do that first
-        fn move_racket(racket: &mut[f64;2], target: &[f64;2], dt: f64) -> [f64;2] {
-            let max_move = [RACKET_MAX_SPEED[0]*dt, RACKET_MAX_SPEED[1]*dt];
+        fn move_racket(racket: &mut[f64;2],  target: &[f64;2],  max_speed: [f64;2],  dt: f64) -> [f64;2] {
+            let max_move = [max_speed[0]*dt, max_speed[1]*dt];
             let diff = [target[0]-racket[0], target[1]-racket[1]];
             let move_x = clamp(diff[0], (-max_move[0], max_move[0]));
             let move_y = clamp(diff[1], (-max_move[1], max_move[1]));
             *racket = [racket[0]+move_x, racket[1]+move_y];
             return [move_x/dt, move_y/dt];
         }
-        let player_speed = move_racket(&mut self.player_pos, &self.player_target, dt);
-        let opponent_speed = move_racket(&mut self.opponent_pos, &self.opponent_target, dt);
+        let player_speed = move_racket(&mut self.player_pos, &self.player_target, PLAYER_MAX_SPEED, dt);
+        let opponent_speed = move_racket(&mut self.opponent_pos, &self.opponent_target, OPPONENT_MAX_SPEED, dt);
 
         if self.state == State::PlayerStart {
             self.ball_pos = [self.player_pos[0], self.player_pos[1], BALL_RADIUS];
