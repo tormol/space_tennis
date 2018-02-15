@@ -50,6 +50,7 @@ const RACKET_BORDER_WIDTH: [f64;2] = [0.01333, 0.00666]; // [left/right, top/bot
 const BALL_COLOR: &str = "aaff55ee";
 const BALL_LINE_COLOR: &str = "eeeeee88";
 const MISS_COLOR: &str = "ff3333";
+const PAUSE_COLOR: &str = "888877aa";
 
 fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
          if p <= min   {min}
@@ -212,6 +213,13 @@ impl Game {
             let horizontal = [opponent_x, top+radius_frac*2.0/3.0, radius_frac*2.0, radius_frac*2.0/3.0];
             draw::rectangle(miss_color, vertical, transform, gfx);
             draw::rectangle(miss_color, horizontal, transform, gfx);
+        }
+
+        if self.state == State::Paused {
+            // draw pause sign
+            let pause_color = color::hex(PAUSE_COLOR);
+            draw::rectangle(pause_color, [0.4, 0.4, 0.075, 0.2], transform, gfx);
+            draw::rectangle(pause_color, [0.525, 0.4, 0.075, 0.2], transform, gfx);
         }
     }
 
@@ -395,6 +403,7 @@ fn main() {
             Input::Move(Motion::MouseCursor(x,y)) => {
                 game.mouse_move([x/size[0], y/size[1]]);
             }
+            // TODO pause when window loses focos (!= mouse leaves)
             _ => {}
         }
     }
