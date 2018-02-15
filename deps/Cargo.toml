@@ -10,12 +10,15 @@ crate-type = ["dylib"]
 
 [dependencies]
 piston_window = "0.64"
+pistoncore-glutin_window = "0.35.0"
 piston2d-opengl_graphics = "0.42"
 
 [profile.dev]
 opt-level = 3
-# lto = true
+lto = true
+debug = true
 
 [profile.release]
+opt-level = 3
 lto = true
-# debug = true
+debug = false
