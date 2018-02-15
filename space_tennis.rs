@@ -28,6 +28,7 @@ const UPDATE_TIME: f64 = 1.0/60.0;
 const ARENA: [f64;3] = [1.0, 1.0, 2.0]; // 
 const BALL_RADIUS: f64 = 0.125; // exact representable
 const MISS_BALL_RADIUS: f64 = 0.025;
+const MAX_MISSES: u32 = (ARENA[1]/(3.0*MISS_BALL_RADIUS)) as u32;
 const RACKET_SIZE: [f64;2] = [0.22, 0.15];
 const PLAYER_MAX_SPEED: [f64;2] = [0.9, 0.9];
 const OPPONENT_MAX_SPEED: [f64;2] = [0.4, 0.4];
@@ -190,13 +191,27 @@ impl Game {
         let start_y = 0.5-(ARENA[1]/front_viewable)/2.0;
         let player_x = 0.5 + (ARENA[0]/front_viewable)/2.0 + 2.0*radius_frac;
         let opponent_x = 0.5 - (ARENA[0]/front_viewable)/2.0 - 4.0*radius_frac;
-        for n in 0..self.player_misses {
+        for n in (0..self.player_misses).take(MAX_MISSES as usize) {
             let rect = [player_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
             draw::ellipse(miss_color, rect, transform, gfx);
         }
-        for n in 0..self.opponent_misses {
+        if self.player_misses > MAX_MISSES {
+            let top = start_y + n_offset*(MAX_MISSES as f64);
+            let vertical = [player_x+radius_frac*2.0/3.0, top, radius_frac*2.0/3.0, radius_frac*2.0];
+            let horizontal = [player_x, top+radius_frac*2.0/3.0, radius_frac*2.0, radius_frac*2.0/3.0];
+            draw::rectangle(miss_color, vertical, transform, gfx);
+            draw::rectangle(miss_color, horizontal, transform, gfx);
+        }
+        for n in (0..self.opponent_misses).take(MAX_MISSES as usize) {
             let rect = [opponent_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
             draw::ellipse(miss_color, rect, transform, gfx);
+        }
+        if self.opponent_misses > MAX_MISSES {
+            let top = start_y + n_offset*MAX_MISSES as f64;
+            let vertical = [opponent_x+radius_frac*2.0/3.0, top, radius_frac*2.0/3.0, radius_frac*2.0];
+            let horizontal = [opponent_x, top+radius_frac*2.0/3.0, radius_frac*2.0, radius_frac*2.0/3.0];
+            draw::rectangle(miss_color, vertical, transform, gfx);
+            draw::rectangle(miss_color, horizontal, transform, gfx);
         }
     }
 
