@@ -1,4 +1,4 @@
-/* Copyright 2017 Torbjørn Birch Moltu
+/* Copyright 2018 Torbjørn Birch Moltu
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -12,6 +12,11 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/* Code structure:
+ * The game logic and rendering is done by methods attached to the Game struct.
+ * `main()` handles window setup and extracts wanted events from the event loop.
  */
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
@@ -260,7 +265,7 @@ impl Game {
         self.opponent_target = [target_x, target_y];
     }
 
-    fn update(&mut self, dt: f64) {
+    fn update(&mut self,  dt: f64) {
         if self.state == State::Paused {
             return;
         }
@@ -386,17 +391,21 @@ fn main() {
             Event::Loop(Loop::Render(render_args)) => {
                 let render_args: RenderArgs = render_args;
                 // An optimization introduced in opengl_graphics 0.39.1 causes
-                // severe glitching if not wrapped in .draw.
-                // (calling it afterwards with an empty closure seems to work too)
+                // severe glitching if not wrapped in `gfx.draw()`.
+                // (just calling it at the end with an empty closure
+                //  seems to work too, for now...)
                 gfx.draw(render_args.viewport(), |context, gfx| {
                     let context: Context = context;
                     let gfx: &mut GlGraphics = gfx; // the same instance as outside
                     size = context.get_view_size();
                     let context = context.scale(size[0], size[1]);
 
-                    //by default alpha blending is disabled, which means all semi-transparent colors are considered opaque.
-                    //since colors are blended pixel for pixel, this has a performance cost,
-                    //the alternative is to check for existing color in tile, and blend manually, or even statically
+                    // by default alpha blending is disabled, which means all
+                    // semi-transparent colors are considered opaque.
+                    // Blend::Alpha blends colors pixel for pixel,
+                    // which has a performance cost.
+                    // The alternative would be to check for an existing color
+                    // in the tile, and blend manually or even statically.
                     context.draw_state.blend(Blend::Alpha);
                     draw::clear(color::BLACK, gfx);
 
