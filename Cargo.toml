@@ -11,5 +11,5 @@ path = "space_tennis.rs"
 deps = {path="deps/"}
 
 [profile.release]
-lto = true
+# lto = true # ICE; https://github.com/rust-lang/rust/issues/50324
 # debug = true
