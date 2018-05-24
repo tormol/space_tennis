@@ -22,9 +22,9 @@ extern crate opengl_graphics;
 use opengl_graphics::{OpenGL, GlGraphics};
 
 extern crate piston_window;
+use piston_window::{Event,Loop,RenderArgs,UpdateArgs,Input}; // from piston_input
+use piston_window::{ButtonArgs,ButtonState,Button,MouseButton,Motion}; // from piston_input
 use piston_window::{Context,DrawState,Transformed,color,math}; // from piston2d-graphics
-use piston_window::mouse::MouseButton; // from piston::input
-use piston_window::{Input,Button,Motion,RenderArgs,UpdateArgs}; // from piston::input
 use piston_window::draw_state::Blend; // from piston2d-graphics
 use piston_window::PistonWindow;
 use piston_window::WindowSettings; // from piston::window
@@ -383,7 +383,7 @@ fn main() {
     let mut event_loop: Events = window.events;
     while let Some(e) = event_loop.next(&mut window) {
         match e {
-            Input::Render(render_args/*: RenderArgs*/) => {
+            Event::Loop(Loop::Render(render_args)) => {
                 let render_args: RenderArgs = render_args;
                 // An optimization introduced in opengl_graphics 0.39.1 causes
                 // severe glitching if not wrapped in .draw.
@@ -403,15 +403,19 @@ fn main() {
                     game.render(context.draw_state, context.transform, gfx);
                 });
             }
-            Input::Update(update_args) => {
-                let update_args: UpdateArgs = update_args;
-                game.update(update_args.dt);// deltatime is its only field
+            Event::Loop(Loop::Update(update_args)) => {
+                let UpdateArgs{dt: deltatime} = update_args;
+                game.update(deltatime);
             }
 
-            Input::Press(Button::Mouse(button)) => {
+            Event::Input(Input::Button(ButtonArgs {
+                    state: ButtonState::Press,
+                    button: Button::Mouse(button),
+                    ..
+            })) => {
                 game.mouse_press(button);
             }
-            Input::Move(Motion::MouseCursor(x,y)) => {
+            Event::Input(Input::Move(Motion::MouseCursor(x,y))) => {
                 game.mouse_move([x/size[0], y/size[1]]);
             }
             // TODO pause when window loses focos (!= mouse leaves)
