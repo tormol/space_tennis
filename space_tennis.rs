@@ -17,11 +17,23 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::f64::consts::PI;
-extern crate deps;
-use deps::*;
+
+extern crate opengl_graphics;
+use opengl_graphics::{OpenGL, GlGraphics};
+
+extern crate piston_window;
+use piston_window::{Context,DrawState,Transformed,color,math}; // from piston2d-graphics
+use piston_window::mouse::MouseButton; // from piston::input
+use piston_window::{Input,Button,Motion,RenderArgs,UpdateArgs}; // from piston::input
+use piston_window::draw_state::Blend; // from piston2d-graphics
+use piston_window::PistonWindow;
+use piston_window::WindowSettings; // from piston::window
+use piston_window::Events; // from piston::event_loop
 mod draw {
-    pub use deps::{clear, rectangle, line, ellipse};
+    pub use piston_window::{clear,rectangle,line,ellipse};
 }
+
+extern crate glutin_window;
 
 const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
 const UPDATE_TIME: f64 = 1.0/60.0;

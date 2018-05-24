@@ -171,15 +171,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "deps"
-version = "0.0.0"
-dependencies = [
- "piston2d-opengl_graphics 0.42.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "piston_window 0.64.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pistoncore-glutin_window 0.35.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "dlib"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -905,7 +896,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "space_tennis"
 version = "0.0.0"
 dependencies = [
- "deps 0.0.0",
+ "piston2d-opengl_graphics 0.42.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "piston_window 0.64.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pistoncore-glutin_window 0.35.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

@@ -8,8 +8,11 @@ name = "space_tennis"
 path = "space_tennis.rs"
 
 [dependencies]
-deps = {path="deps/"}
+piston_window = "0.64"
+pistoncore-glutin_window = "0.35.0"
+piston2d-opengl_graphics = "0.42"
 
 [profile.release]
-# lto = true # ICE; https://github.com/rust-lang/rust/issues/50324
+opt-level = 3
+# lto = true
 # debug = true
