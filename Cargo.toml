@@ -12,7 +12,10 @@ piston_window = "0.79"
 pistoncore-glutin_window = "0.46"
 piston2d-opengl_graphics = "0.53"
 
+[profile.dev]
+panic = "abort"
+
 [profile.release]
 opt-level = 3
-# lto = true
-# debug = true
+lto = true
+panic = "abort"
