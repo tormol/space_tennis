@@ -773,7 +773,7 @@ dependencies = [
 
 [[package]]
 name = "space_tennis"
-version = "0.0.0"
+version = "1.0.0"
 dependencies = [
  "piston2d-opengl_graphics 0.53.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston_window 0.79.0 (registry+https://github.com/rust-lang/crates.io-index)",
