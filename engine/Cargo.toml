@@ -5,3 +5,6 @@ authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
 
 [dependencies]
 engine_dylib = {path="dylib"}
+
+[features]
+dyn = ["engine_dylib/dyn"]

@@ -1,4 +1,6 @@
-#![cfg_attr(debug_assertions, crate_type="dylib")]
+//#![cfg_attr(debug_assertions, crate_type = "dylib")]
+//#![cfg_attr(feature="dyn", crate_type = "dylib")]
+//#![crate_type = "dylib"]
 
 use std::sync::atomic::{AtomicPtr, Ordering::*};
 
@@ -87,6 +89,7 @@ fn map_button(b: pwMouseButton) -> MouseButton {
 }
 
 pub fn start(name: &'static str,  initial_size: [f64;2],  game: *mut u8,  functions: Functions) {
+    // AtomicPtr because I intend to update from another thread based on inotify events
     let f = AtomicPtr::new(Box::leak(Box::new(functions)));
     let s = StartUpInfo {name, initial_size, game};
     run(s, &f);
@@ -159,6 +162,9 @@ fn reload() -> Option<Functions> {
 }
 
 fn run(s: StartUpInfo,  functions: &AtomicPtr<Functions>) {
+    if cfg!(feature="dyn") {
+        println!("dyn");
+    }
     let window_size = [s.initial_size[0] as u32, s.initial_size[1] as u32];
     let mut window: PistonWindow = WindowSettings::new(s.name, window_size)
         .vsync(true)
