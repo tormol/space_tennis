@@ -10,8 +10,8 @@ license = "Apache-2 / MIT"
 
 # build as dylib in debug mode to reduce compile time,
 # but statically in release mode for selfcontained-ness
-#[lib] # works unconditionally
-[target.'cfg(debug_assertions)'.lib] # does not have any effect
+[lib] # works unconditionally
+#[target.'cfg(debug_assertions)'.lib] # does not have any effect
 #[target.'cfg(feature="dyn")'.lib] # doesn't work eiter (given --features=dyn)
 crate-type = ["dylib"]
 
