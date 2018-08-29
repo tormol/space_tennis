@@ -365,5 +365,5 @@ impl Game for SpaceTennis {
 expose_game!{SpaceTennis}
 fn main() {
     let mut st = SpaceTennis::new();
-    start(&mut st, "space tennis", INITIAL_SIZE);
+    start(&mut st, "space tennis", INITIAL_SIZE, "space_tennis.rs");
 }

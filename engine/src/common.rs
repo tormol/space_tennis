@@ -1,5 +1,8 @@
 //! types used by both hidden.rs and lib.rs
 
+use std::path::Path;
+use std::borrow::Cow;
+
 pub type Color = [f32;4];//piston_window::types::Color;
 pub type Matrix2d = [[f64;3];2];//
 pub trait Graphics {
@@ -36,7 +39,8 @@ pub struct Functions {
 }
 
 pub struct StartUpInfo {
-    pub name: &'static str,
+    pub name: Cow<'static,str>,
+    pub src: Cow<'static,Path>,
     pub initial_size: [f64; 2],
     pub game: *mut u8,
 }

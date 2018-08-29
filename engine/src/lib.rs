@@ -2,25 +2,48 @@
 //#![cfg_attr(feature="dyn", crate_type = "dylib")]
 //#![crate_type = "dylib"]
 
+use std::path::Path;
+use std::borrow::Cow;
 use std::mem::transmute;
 
 mod common;
 pub use common::{Graphics,MouseButton,Color,Matrix2d,Game,Functions,StartUpInfo};
-mod hidden;
-pub use hidden::hex;
+
+#[cfg(debug_assertions)]
+mod reload;
+#[cfg(not(debug_assertions))]
+mod reload {
+    pub struct FunctionGetter(Functions);
+    impl FunctionGetter {
+        pub fn new(f: Functions,  _: Cow<'static,Path>) -> Self {
+            FunctionGetter(f)
+        }
+        pub fn get(&self) -> &Functions {
+            &self.0
+        }
+    }
+}
+
+mod piston;
+pub use piston::hex;
 
 
-pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64;2]) {
+pub fn start<G:Game, S:Into<Cow<'static,str>>>
+(game: &mut G,  name: S,  initial_size: [f64;2],  source_start: &'static str) {
     unsafe {
-        let game = game as *mut G as *mut u8;
         let f = Functions {
             render: transmute::<fn(&mut G,Matrix2d,&mut dyn Graphics),_>(G::render),
             update: transmute::<fn(&mut G,f64),_>(G::update),
             mouse_move: transmute::<fn(&mut G,[f64;2]),_>(G::mouse_move),
             mouse_press: transmute::<fn(&mut G,MouseButton),_>(G::mouse_press),
         };
-        let s = StartUpInfo {name, initial_size, game};
-        hidden::start(s, f)
+        let s = StartUpInfo {
+            game: game as *mut G as *mut u8,
+            name: name.into(),
+            initial_size: initial_size,
+            src: Cow::Borrowed(Path::new(source_start)),
+        };
+        piston::start(s, f)
     }
 }
 
