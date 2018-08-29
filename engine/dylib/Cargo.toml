@@ -6,12 +6,8 @@ authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
 [lib]
 crate-type=["dylib"]
 
-[profile.dev]
-panic = "abort"
-[profile.release]
-panic = "abort"
-
 [dependencies]
 piston_window = "0.80"
 pistoncore-glutin_window = "0.47"
 piston2d-opengl_graphics = "0.53"
+dlopen = "0.1"

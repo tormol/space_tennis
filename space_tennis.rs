@@ -22,7 +22,7 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::f64::consts::PI;
-extern crate engine;
+#[macro_use] extern crate engine;
 use engine::*;
 
 const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
@@ -362,6 +362,7 @@ impl Game for SpaceTennis {
     }
 }
 
+expose_game!{SpaceTennis}
 fn main() {
     let mut st = SpaceTennis::new();
     start(&mut st, "space tennis", INITIAL_SIZE);

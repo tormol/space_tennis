@@ -3,10 +3,5 @@ name = "engine"
 version = "0.0.0"
 authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
 
-[profile.dev]
-panic = "abort"
-[profile.release]
-panic = "abort"
-
 [dependencies]
 engine_dylib = {path="dylib"}

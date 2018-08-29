@@ -5,7 +5,7 @@ use opengl_graphics::{OpenGL, GlGraphics};
 
 extern crate piston_window;
 use piston_window::{Event,Loop,RenderArgs,UpdateArgs,Input}; // from piston_input
-use piston_window::{ButtonArgs,ButtonState,Button,Motion}; // from piston_input
+use piston_window::{ButtonArgs,ButtonState,Button,Key,Motion}; // from piston_input
 use piston_window::MouseButton as pwMouseButton;
 use piston_window::{Context,Transformed,color}; // from piston2d-graphics
 use piston_window::draw_state::Blend; // from piston2d-graphics
@@ -13,6 +13,8 @@ use piston_window::PistonWindow;
 use piston_window::WindowSettings; // from piston::window
 use piston_window::Events; // from piston::event_loop
 
+extern crate dlopen;
+use dlopen::raw::Library;
 
 #[derive(Debug, Clone,Copy, PartialEq,Eq)]
 pub enum MouseButton {
@@ -79,9 +81,71 @@ fn map_button(b: pwMouseButton) -> MouseButton {
 }
 
 pub fn start(name: &'static str,  initial_size: [f64;2],  game: *mut u8,  functions: Functions) {
-    let f = AtomicPtr::new(Box::into_raw(Box::new(functions)));
+    let f = AtomicPtr::new(Box::leak(Box::new(functions)));
     let s = StartUpInfo {name, initial_size, game};
     run(s, &f);
+}
+
+fn reload() -> Option<Functions> {
+    unsafe {
+        let path = match std::env::current_exe() {
+            Ok(path) => path,
+            Err(e) => {
+                eprintln!("Cannot get path of current executable: {}", e);
+                return None;
+            }
+        };
+        let mut path = match path.into_os_string().into_string() {
+            Ok(path) => path,
+            Err(_) => {
+                eprintln!("Non-unicode paths are not supported, sorry.");
+                return None;
+            }
+        };
+        // (on linux) current_exe() appends " (deleted)" when the file has been replaced
+        if path.ends_with(" (deleted)") {
+            let len = path.len();
+            path.truncate(len-" (deleted)".len());
+        }
+        // (on linux) dlopen refuses to open the same path multiple times
+        for reload in 1.. {
+            let new_name = format!("{}-reload.{}", path, reload);
+            match std::fs::hard_link(&path, &new_name) {
+                Ok(_) => {
+                    path = new_name;
+                    break;
+                }
+                Err(ref e) if e.kind() != std::io::ErrorKind::AlreadyExists => {
+                    eprintln!("link {:?} to {:?} failed with {}", path, new_name, e);
+                    return None;
+                }
+                Err(_) => {}
+            }
+        }
+        println!("Trying to reload game functions from {:?}", path);
+        let lib = match Library::open(&path) {
+            Ok(lib) => Box::leak(Box::new(lib)),
+            Err(e) => {
+                eprintln!("Failed to open {:?} as library: {}", path, e);
+                return None;
+            }
+        };
+        let functions = (
+            lib.symbol("game_render"),
+            lib.symbol("game_update"),
+            lib.symbol("game_mouse_move"),
+            lib.symbol("game_mouse_press"),
+        );
+        match functions {
+            (Ok(render), Ok(update), Ok(mouse_move), Ok(mouse_press)) => {
+                Some(Functions{render, update, mouse_move, mouse_press})
+            }
+            _ => {
+                eprintln!("{:?} is missing symbols", path);
+                None
+            }
+        }
+    }
 }
 
 fn run(s: StartUpInfo,  functions: &AtomicPtr<Functions>) {
@@ -139,6 +203,19 @@ fn run(s: StartUpInfo,  functions: &AtomicPtr<Functions>) {
                 unsafe{ (f.mouse_move)(s.game, [x/size[0], y/size[1]]) };
             }
             // TODO pause when window loses focos (!= mouse leaves)
+
+            Event::Input(Input::Button(ButtonArgs {
+                    state: ButtonState::Press,
+                    button: Button::Keyboard(Key::R),
+                    ..
+            })) => {
+                if let Some(new_functions) = reload() {
+                    println!("before: mouse_press={:p}->{:p}", f, f.mouse_press);
+                    functions.store(Box::leak(Box::new(new_functions)), SeqCst);
+                    let f = unsafe{&*functions.load(SeqCst)};
+                    println!("after: mouse_press={:p}->{:p}", f, f.mouse_press);
+                }
+            }
             _ => {}
         }
     }
