@@ -3,11 +3,10 @@ name = "engine_dylib"
 version = "0.0.0"
 authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
 
-[lib]
-crate-type=["dylib"]
-
 [dependencies]
 piston_window = "0.80"
 pistoncore-glutin_window = "0.47"
 piston2d-opengl_graphics = "0.53"
+
+[target.'cfg(debug_assertions)'.dependencies]
 dlopen = "0.1"

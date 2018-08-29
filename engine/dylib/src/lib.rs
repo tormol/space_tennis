@@ -1,3 +1,5 @@
+#![cfg_attr(debug_assertions, crate_type="dylib")]
+
 use std::sync::atomic::{AtomicPtr, Ordering::*};
 
 extern crate opengl_graphics;
@@ -5,15 +7,19 @@ use opengl_graphics::{OpenGL, GlGraphics};
 
 extern crate piston_window;
 use piston_window::{Event,Loop,RenderArgs,UpdateArgs,Input}; // from piston_input
-use piston_window::{ButtonArgs,ButtonState,Button,Key,Motion}; // from piston_input
-use piston_window::MouseButton as pwMouseButton;
+use piston_window::{ButtonArgs,ButtonState,Button,Motion}; // from piston_input
+use piston_window::MouseButton as pwMouseButton; // from piston_input
 use piston_window::{Context,Transformed,color}; // from piston2d-graphics
 use piston_window::draw_state::Blend; // from piston2d-graphics
 use piston_window::PistonWindow;
 use piston_window::WindowSettings; // from piston::window
 use piston_window::Events; // from piston::event_loop
+#[cfg(debug_assertions)]
+use piston_window::Key; // from piston_input
 
+#[cfg(debug_assertions)]
 extern crate dlopen;
+#[cfg(debug_assertions)]
 use dlopen::raw::Library;
 
 #[derive(Debug, Clone,Copy, PartialEq,Eq)]
@@ -86,6 +92,7 @@ pub fn start(name: &'static str,  initial_size: [f64;2],  game: *mut u8,  functi
     run(s, &f);
 }
 
+#[cfg(debug_assertions)]
 fn reload() -> Option<Functions> {
     unsafe {
         let path = match std::env::current_exe() {
@@ -124,6 +131,9 @@ fn reload() -> Option<Functions> {
         }
         println!("Trying to reload game functions from {:?}", path);
         let lib = match Library::open(&path) {
+            // leak the handle because unloading is very risky,
+            // this should only happen a limited number of times,
+            // and restarting isn't that bad either
             Ok(lib) => Box::leak(Box::new(lib)),
             Err(e) => {
                 eprintln!("Failed to open {:?} as library: {}", path, e);
@@ -204,6 +214,7 @@ fn run(s: StartUpInfo,  functions: &AtomicPtr<Functions>) {
             }
             // TODO pause when window loses focos (!= mouse leaves)
 
+            #[cfg(debug_assertions)]
             Event::Input(Input::Button(ButtonArgs {
                     state: ButtonState::Press,
                     button: Button::Keyboard(Key::R),
@@ -216,6 +227,7 @@ fn run(s: StartUpInfo,  functions: &AtomicPtr<Functions>) {
                     println!("after: mouse_press={:p}->{:p}", f, f.mouse_press);
                 }
             }
+
             _ => {}
         }
     }

@@ -18,10 +18,6 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64;2]) 
             update: transmute::<fn(&mut G,f64),_>(G::update),
             mouse_move: transmute::<fn(&mut G,[f64;2]),_>(G::mouse_move),
             mouse_press: transmute::<fn(&mut G,MouseButton),_>(G::mouse_press),
-            // render: game_render_dyn,
-            // update: game_update_dyn,
-            // mouse_move: game_mouse_move_dyn,
-            // mouse_press: game_mouse_press_dyn,
         };
         engine_dylib::start(name, initial_size, g, f);
     }
@@ -29,22 +25,22 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64;2]) 
 
 #[macro_export]
 macro_rules! expose_game{($game:ty) => {
-    //#[no_mangle]
+    #[cfg(debug_assertions)]
     #[export_name="game_render"]
     pub unsafe fn game_render_dyn(gamestate: *mut u8,  transform: Matrix2d,  gfx: &mut dyn Graphics) {
         (&mut*(gamestate as *mut $game)).render(transform, gfx)
     }
-    //#[no_mangle]
+    #[cfg(debug_assertions)]
     #[export_name="game_update"]
     pub unsafe fn game_update_dyn(gamestate: *mut u8,  deltatime: f64) {
         (&mut*(gamestate as *mut $game)).update(deltatime)
     }
-    //#[no_mangle]
+    #[cfg(debug_assertions)]
     #[export_name="game_mouse_move"]
     pub unsafe fn game_mouse_move_dyn(gamestate: *mut u8,  pos: [f64;2]) {
         (&mut*(gamestate as *mut $game)).mouse_move(pos)
     }
-    //#[no_mangle]
+    #[cfg(debug_assertions)]
     #[export_name="game_mouse_press"]
     pub unsafe fn game_mouse_press_dyn(gamestate: *mut u8,  button: MouseButton) {
         (&mut*(gamestate as *mut $game)).mouse_press(button)

@@ -14,10 +14,7 @@ path = "space_tennis.rs"
 [dependencies]
 engine = {path="engine"}
 
-[profile.dev]
-#panic = "abort"
-
 [profile.release]
-#panic = "abort"
+panic = "abort"
 opt-level = 3
 lto = true
