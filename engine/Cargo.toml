@@ -1,17 +1,18 @@
 [package]
 name = "engine"
-version = "0.0.0"
-authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
 description = """
 Reduce compile times by hiding dependencies in a dylib
 and expose custom types and functions for what I need.
 """
+version = "0.0.0"
+authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
+license = "Apache-2 / MIT"
 
 # build as dylib in debug mode to reduce compile time,
 # but statically in release mode for selfcontained-ness
-[lib] # works unconditionally
-#[target.'cfg(debug_assertions)'.lib] # doesn't work
-#[target.'cfg(feature="dyn")'.lib] # doesn't work eiter
+#[lib] # works unconditionally
+[target.'cfg(debug_assertions)'.lib] # does not have any effect
+#[target.'cfg(feature="dyn")'.lib] # doesn't work eiter (given --features=dyn)
 crate-type = ["dylib"]
 
 [dependencies]

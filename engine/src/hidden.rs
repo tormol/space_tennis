@@ -137,23 +137,23 @@ fn run(s: StartUpInfo,  functions: &AtomicPtr<Functions>) {
         .opengl(OpenGL::V3_2)
         .build()
         .unwrap();
-    let mut gfx = GlGraphics::new(OpenGL::V3_2);
+    let mut g = GlGraphics::new(OpenGL::V3_2);
 
     let mut size = s.initial_size; // changes if window is resized
 
     let mut event_loop: Events = window.events;
-    while let Some(e) = event_loop.next(&mut window) {
+    while let Some(event) = event_loop.next(&mut window) {
         let f = unsafe{&*functions.load(SeqCst)};
-        match e {
+        match event {
             Event::Loop(Loop::Render(render_args)) => {
                 let render_args: RenderArgs = render_args;
                 // An optimization introduced in opengl_graphics 0.39.1 causes
                 // severe glitching if not wrapped in `gfx.draw()`.
                 // (just calling it at the end with an empty closure
                 //  seems to work too, for now...)
-                gfx.draw(render_args.viewport(), |context, gfx| {
+                g.draw(render_args.viewport(), |context, g| {
                     let context: Context = context;
-                    let gfx: &mut GlGraphics = gfx; // the same instance as outside
+                    let g: &mut GlGraphics = g; // the same instance as outside
                     size = context.get_view_size();
                     let context = context.scale(size[0], size[1]);
 
@@ -164,8 +164,8 @@ fn run(s: StartUpInfo,  functions: &AtomicPtr<Functions>) {
                     // The alternative would be to check for an existing color
                     // in the tile, and blend manually or even statically.
                     context.draw_state.blend(Blend::Alpha);
-                    piston_window::clear(color::BLACK, gfx);
-                    let wrapper = &mut GlWrap(gfx);
+                    piston_window::clear(color::BLACK, g);
+                    let wrapper = &mut GlWrap(g);
                     unsafe{ (f.render)(s.game, context.transform, wrapper) };
                 });
             }
