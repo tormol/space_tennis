@@ -200,13 +200,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "engine"
 version = "0.0.0"
 dependencies = [
- "engine_dylib 0.0.0",
-]
-
-[[package]]
-name = "engine_dylib"
-version = "0.0.0"
-dependencies = [
  "dlopen 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston2d-opengl_graphics 0.53.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston_window 0.80.0 (registry+https://github.com/rust-lang/crates.io-index)",

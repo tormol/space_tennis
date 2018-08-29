@@ -1,52 +1,31 @@
-//#![cfg_attr(debug_assertions, crate_type = "dylib")]
-//#![cfg_attr(feature="dyn", crate_type = "dylib")]
-//#![crate_type = "dylib"]
-
 use std::sync::atomic::{AtomicPtr, Ordering::*};
+use std::{env,fs};
+use std::io::ErrorKind::*;
+
+use common::*;
 
 extern crate opengl_graphics;
-use opengl_graphics::{OpenGL, GlGraphics};
+use self::opengl_graphics::{OpenGL, GlGraphics};
 
 extern crate piston_window;
-use piston_window::{Event,Loop,RenderArgs,UpdateArgs,Input}; // from piston_input
-use piston_window::{ButtonArgs,ButtonState,Button,Motion}; // from piston_input
-use piston_window::MouseButton as pwMouseButton; // from piston_input
-use piston_window::{Context,Transformed,color}; // from piston2d-graphics
-use piston_window::draw_state::Blend; // from piston2d-graphics
-use piston_window::PistonWindow;
-use piston_window::WindowSettings; // from piston::window
-use piston_window::Events; // from piston::event_loop
+use self::piston_window::{Event,Loop,RenderArgs,UpdateArgs,Input}; // from piston_input
+use self::piston_window::{ButtonArgs,ButtonState,Button,Motion}; // from piston_input
+use self::piston_window::MouseButton as pwMouseButton; // from piston_input
+use self::piston_window::{Context,Transformed,color}; // from piston2d-graphics
+use self::piston_window::draw_state::Blend; // from piston2d-graphics
+use self::piston_window::PistonWindow;
+use self::piston_window::WindowSettings; // from piston::window
+use self::piston_window::Events; // from piston::event_loop
 #[cfg(debug_assertions)]
-use piston_window::Key; // from piston_input
+use self::piston_window::Key; // from piston_input
 
 #[cfg(debug_assertions)]
 extern crate dlopen;
 #[cfg(debug_assertions)]
-use dlopen::raw::Library;
+use self::dlopen::raw::Library;
 
-#[derive(Debug, Clone,Copy, PartialEq,Eq)]
-pub enum MouseButton {
-    Unknown,
-    Left,
-    Right,
-    Middle,
-    X1,
-    X2,
-    Button6,
-    Button7,
-    Button8,
-}
-
-
-pub type Color = [f32;4];//piston_window::types::Color;
-pub type Matrix2d = [[f64;3];2];//
 pub fn hex(s: &str) -> Color {
     piston_window::color::hex(s)
-}
-pub trait Graphics {
-    fn line(&mut self, Color, f64, [f64;4], Matrix2d);
-    fn rectangle(&mut self, Color, [f64;4], Matrix2d);
-    fn ellipse(&mut self, Color, [f64;4], Matrix2d);
 }
 struct GlWrap<'a>(&'a mut GlGraphics);
 impl<'a> Graphics for GlWrap<'a> {
@@ -59,19 +38,6 @@ impl<'a> Graphics for GlWrap<'a> {
     fn ellipse(&mut self,  color: Color,  where_: [f64;4],  transform: Matrix2d) {
         piston_window::ellipse(color, where_, transform, self.0)
     }
-}
-
-pub struct Functions {
-    pub render: unsafe fn(*mut u8,  Matrix2d,  &mut dyn Graphics),
-    pub update: unsafe fn(*mut u8,  f64),
-    pub mouse_move: unsafe fn(*mut u8,  [f64; 2]),
-    pub mouse_press: unsafe fn(*mut u8,  MouseButton),
-}
-
-struct StartUpInfo {
-    name: &'static str,
-    initial_size: [f64; 2],
-    game: *mut u8,
 }
 
 fn map_button(b: pwMouseButton) -> MouseButton {
@@ -88,17 +54,17 @@ fn map_button(b: pwMouseButton) -> MouseButton {
     }
 }
 
-pub fn start(name: &'static str,  initial_size: [f64;2],  game: *mut u8,  functions: Functions) {
+#[inline(never)]
+pub fn start(s: StartUpInfo,  functions: Functions) {
     // AtomicPtr because I intend to update from another thread based on inotify events
     let f = AtomicPtr::new(Box::leak(Box::new(functions)));
-    let s = StartUpInfo {name, initial_size, game};
     run(s, &f);
 }
 
 #[cfg(debug_assertions)]
 fn reload() -> Option<Functions> {
     unsafe {
-        let path = match std::env::current_exe() {
+        let path = match env::current_exe() {
             Ok(path) => path,
             Err(e) => {
                 eprintln!("Cannot get path of current executable: {}", e);
@@ -120,12 +86,12 @@ fn reload() -> Option<Functions> {
         // (on linux) dlopen refuses to open the same path multiple times
         for reload in 1.. {
             let new_name = format!("{}-reload.{}", path, reload);
-            match std::fs::hard_link(&path, &new_name) {
+            match fs::hard_link(&path, &new_name) {
                 Ok(_) => {
                     path = new_name;
                     break;
                 }
-                Err(ref e) if e.kind() != std::io::ErrorKind::AlreadyExists => {
+                Err(ref e) if e.kind() != AlreadyExists => {
                     eprintln!("link {:?} to {:?} failed with {}", path, new_name, e);
                     return None;
                 }
