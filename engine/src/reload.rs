@@ -14,7 +14,7 @@ use self::dlopen::raw::Library;
 extern crate notify;
 use self::notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
 
-fn reload(iterations: &mut usize) -> Option<Functions> {
+fn reload(iterations: &mut usize,  current_size: usize) -> Option<&'static Functions> {
     unsafe {
         let path = match env::current_exe() {
             Ok(path) => path,
@@ -41,23 +41,22 @@ fn reload(iterations: &mut usize) -> Option<Functions> {
         if let Err(e) = fs::remove_file(&new_name) {
             if e.kind() != NotFound {
                 eprintln!("Cannot delete pre-existing {:?}: {}, trying: .{}",
-                    &new_name, e, *iterations
+                    &new_name, e, *iterations+1
                 );
-                reload(iterations);
+                // increments iterations and tries again
+                reload(iterations, current_size);
             }
         } else {
-            println!("Deleted pre-existing {:?}", &new_name);
+            //println!("Deleted pre-existing {:?}", &new_name);
         }
         if let Err(e) = fs::hard_link(&path, &new_name) {
             eprintln!("link {:?} to {:?} failed with {}", path, new_name, e);
             return None;
         }
+        drop(path); // prevent using it instead of new_name
         println!("Trying to reload game functions from {:?}", new_name);
         let lib = match Library::open(&new_name) {
-            // leak the handle because unloading is very risky,
-            // this should only happen a limited number of times,
-            // and restarting isn't that bad either
-            Ok(lib) => Box::leak(Box::new(lib)),
+            Ok(lib) => lib,
             Err(e) => {
                 eprintln!("Failed to open {:?} as library: {}", new_name, e);
                 return None;
@@ -66,18 +65,22 @@ fn reload(iterations: &mut usize) -> Option<Functions> {
         if let Err(e) = fs::remove_file(&new_name) {
             eprintln!("Cannot delete {:?} after creating and loading it: {}", &new_name, e);
         }
-        let functions = (
-            lib.symbol("game_render"),
-            lib.symbol("game_update"),
-            lib.symbol("game_mouse_move"),
-            lib.symbol("game_mouse_press"),
-        );
-        match functions {
-            (Ok(render), Ok(update), Ok(mouse_move), Ok(mouse_press)) => {
-                Some(Functions{render, update, mouse_move, mouse_press})
+        let symbol: Result<&Functions, _> = lib.symbol("GAME");
+        match symbol {
+            Ok(ref game) if game.size == current_size => {
+                // leak the handle because unloading is very risky,
+                // this should only happen a limited number of times,
+                // and restarting isn't that bad either
+                Box::leak(Box::new(lib));
+                Some(game)
             }
-            (Err(ref e),_,_,_) | (_,Err(ref e),_,_) | (_,_,Err(ref e),_) | (_,_,_,Err(ref e)) => {
-                eprintln!("{:?} is missing symbol(s): {}", path, e);
+            Ok(_) => {
+                eprintln!("Game struct has changed size, refusing to swap functions");
+                None
+            }
+            Err(_) => {
+                eprintln!("{:?} does not have symbol GAME", new_name);
+                eprintln!("\tYou need to add `expose_game!{$GameStruct}`");
                 None
             }
         }
@@ -89,12 +92,12 @@ fn watch(src: &Path,  functions: &AtomicPtr<Functions>) {
     let mut watcher: RecommendedWatcher = match Watcher::new(tx, Duration::from_secs(2)) {
         Ok(watcher) => watcher,
         Err(e) => {
-            eprintln!("Cannot create fs watcher: {}\nLive reload will not be supported", e);
+            eprintln!("Cannot create fs watcher: {} - Hotswapping will not work", e);
             return;
         }
     };
     if let Err(e) = watcher.watch(&src, RecursiveMode::Recursive) {
-        eprintln!("Cannot watch {:?}: {}\nLive reload will not be supported", src, e);
+        eprintln!("Cannot watch {:?}: {} - Hotswapping will not work", src, e);
         return;
     }
     
@@ -121,10 +124,10 @@ fn watch(src: &Path,  functions: &AtomicPtr<Functions>) {
                 continue;
             }
         }
-        if let Some(new_functions) = reload(&mut iterations) {
-            let after = Box::leak(Box::new(new_functions));
-            let before = functions.swap(after, SeqCst);
-            let before = unsafe{&*before};
+        let before = unsafe{ &*functions.load(SeqCst) };
+        if let Some(new_functions) = reload(&mut iterations, before.size) {
+            functions.store(new_functions as *const _ as *mut _, SeqCst);
+            let after = new_functions;
             println!("before: mouse_press={:p}->{:p}", before, before.mouse_press);
             println!("after : mouse_press={:p}->{:p}", after, after.mouse_press);
         }

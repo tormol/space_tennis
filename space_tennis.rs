@@ -16,7 +16,7 @@
 
 /* Code structure:
  * The game logic and rendering is done by methods attached to the Game struct.
- * `main()` handles window setup and extracts wanted events from the event loop.
+ * `engine/src/piston.rs` handles window setup and extracts wanted events from the event loop.
  */
 
 #![cfg_attr(windows, windows_subsystem = "windows")]

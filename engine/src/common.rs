@@ -2,6 +2,7 @@
 
 use std::path::Path;
 use std::borrow::Cow;
+use std::os::raw::c_void;
 
 pub type Color = [f32;4];//piston_window::types::Color;
 pub type Matrix2d = [[f64;3];2];//
@@ -32,15 +33,16 @@ pub trait Game {
 }
 
 pub struct Functions {
-    pub render: unsafe fn(*mut u8,  Matrix2d,  &mut dyn Graphics),
-    pub update: unsafe fn(*mut u8,  f64),
-    pub mouse_move: unsafe fn(*mut u8,  [f64; 2]),
-    pub mouse_press: unsafe fn(*mut u8,  MouseButton),
+    pub render: unsafe fn(*mut c_void,  Matrix2d,  &mut dyn Graphics),
+    pub update: unsafe fn(*mut c_void,  f64),
+    pub mouse_move: unsafe fn(*mut c_void,  [f64; 2]),
+    pub mouse_press: unsafe fn(*mut c_void,  MouseButton),
+    pub size: usize
 }
 
 pub struct StartUpInfo {
     pub name: Cow<'static,str>,
     pub src: Cow<'static,Path>,
     pub initial_size: [f64; 2],
-    pub game: *mut u8,
+    pub game: *mut c_void,
 }
