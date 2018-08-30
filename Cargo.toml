@@ -14,6 +14,12 @@ path = "space_tennis.rs"
 [dependencies]
 engine = {path="engine"}
 
+[profile.dev]
+#panic = "abort" # doesn't work with dylib
+opt-level = 2
+debug = false
+overflow-checks = false
+
 [profile.release]
 panic = "abort"
 opt-level = 3
