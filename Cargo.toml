@@ -11,6 +11,10 @@ license = "GPL-3.0-or-later"
 name = "space_tennis"
 path = "space_tennis.rs"
 
+[[bin]]
+name = "minimal"
+path = "minimal.rs"
+
 [dependencies]
 engine = {path="engine"}
 
