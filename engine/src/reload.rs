@@ -80,7 +80,7 @@ fn reload(iterations: &mut usize,  current_size: usize) -> Option<&'static Funct
             }
             Err(_) => {
                 eprintln!("{:?} does not have symbol GAME", new_name);
-                eprintln!("\tYou need to add `expose_game!{$GameStruct}`");
+                eprintln!("\tYou need to add `expose_game!{{$GameStruct}}`");
                 None
             }
         }
