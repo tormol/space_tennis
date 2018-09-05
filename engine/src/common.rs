@@ -1,6 +1,5 @@
 //! types used by both hidden.rs and lib.rs
 
-use std::path::Path;
 use std::borrow::Cow;
 use std::os::raw::c_void;
 
@@ -42,7 +41,6 @@ pub struct Functions {
 
 pub struct StartUpInfo {
     pub name: Cow<'static,str>,
-    pub src: Cow<'static,Path>,
     pub initial_size: [f64; 2],
     pub game: *mut c_void,
 }

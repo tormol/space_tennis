@@ -46,13 +46,7 @@ fn map_button(b: pwMouseButton) -> MouseButton {
 }
 
 #[inline(never)]
-pub fn start(s: StartUpInfo,  functions: Functions) {
-    let f = FunctionGetter::new(functions, s.src.clone());
-    run(s, f);
-}
-
-
-fn run(s: StartUpInfo,  functions: FunctionGetter) {
+pub fn start(s: StartUpInfo,  functions: FunctionGetter) {
     let window_size = [s.initial_size[0] as u32, s.initial_size[1] as u32];
     let mut window: PistonWindow = WindowSettings::new(s.name.to_owned(), window_size)
         .vsync(true)

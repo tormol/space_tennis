@@ -2,7 +2,7 @@
 //#![cfg_attr(feature="dyn", crate_type = "dylib")]
 //#![crate_type = "dylib"]
 
-use std::path::Path;
+use std::ffi::OsString;
 use std::borrow::Cow;
 use std::os::raw::c_void;
 use std::mem::{transmute,size_of};
@@ -16,7 +16,7 @@ mod reload;
 mod reload {
     pub struct FunctionGetter(Functions);
     impl FunctionGetter {
-        pub fn new(f: Functions,  _: Cow<'static,Path>) -> Self {
+        pub fn new(f: Functions,  _: Vec<OsString>) -> Self {
             FunctionGetter(f)
         }
         pub fn get(&self) -> &Functions {
@@ -29,8 +29,8 @@ mod piston;
 pub use piston::hex;
 
 
-pub fn start<G:Game, S:Into<Cow<'static,str>>>
-(game: &mut G,  name: S,  initial_size: [f64;2],  source_start: &'static str) {
+pub fn start<G:Game, S:Into<Cow<'static,str>>, A:Into<Vec<OsString>>>
+(game: &mut G,  name: S,  initial_size: [f64;2],  cargo_args: A) {
     unsafe {
         let f = Functions {
             render: transmute::<fn(&mut G,Matrix2d,&mut dyn Graphics),_>(G::render),
@@ -39,11 +39,11 @@ pub fn start<G:Game, S:Into<Cow<'static,str>>>
             mouse_press: transmute::<fn(&mut G,MouseButton),_>(G::mouse_press),
             size: size_of::<G>()
         };
+        let f = reload::FunctionGetter::new(f, cargo_args.into());
         let s = StartUpInfo {
             game: game as *mut G as *mut c_void,
             name: name.into(),
             initial_size: initial_size,
-            src: Cow::Borrowed(Path::new(source_start)),
         };
         piston::start(s, f)
     }
