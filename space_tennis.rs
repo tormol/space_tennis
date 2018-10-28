@@ -22,7 +22,7 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::f64::consts::PI;
-#[macro_use] extern crate engine;
+extern crate engine;
 use engine::*;
 
 const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
