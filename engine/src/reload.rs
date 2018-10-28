@@ -313,9 +313,10 @@ fn watch(src: &Path,  callback: &mut dyn FnMut(PathBuf)) {
             return;
         }
 
-        loop {
+        'next: loop {
             match rx.recv() {
                 Ok(DebouncedEvent::Write(path)) => callback(path),
+                Ok(DebouncedEvent::Create(path)) => callback(path),
                 Ok(DebouncedEvent::Remove(path)) => {
                     // gedit saves files by deleting it and then creating the modified version.
                     // when the watchpoint is removed the watcher will not receive new events,
@@ -335,7 +336,7 @@ fn watch(src: &Path,  callback: &mut dyn FnMut(PathBuf)) {
                     eprintln!("fs watch error: {}, quitting", e);
                     return;
                 }
-                //Ok(e) => println!("other watch event: {:?}", e)
+                Ok(e) => println!("other watch event: {:?}", e)
                 //Ok(_) => {}
             }
         }
