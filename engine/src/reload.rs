@@ -299,33 +299,46 @@ fn reload(exe: &str,  current_size: usize) -> Option<&'static Functions> {
 }
 
 fn watch(src: &Path,  callback: &mut dyn FnMut(PathBuf)) {
-    let (tx, rx) = mpsc::channel();
-    let mut watcher: RecommendedWatcher = match Watcher::new(tx, Duration::from_secs(2)) {
-        Ok(watcher) => watcher,
-        Err(e) => {
-            eprintln!("Cannot create fs watcher: {} - Hotswapping will not work", e);
-            return;
-        }
-    };
-    if let Err(e) = watcher.watch(&src, RecursiveMode::Recursive) {
-        eprintln!("Cannot watch {:?}: {} - Hotswapping will not work", src, e);
-        return;
-    }
-    
-    loop {
-        let path = match rx.recv() {
-            Ok(DebouncedEvent::Write(path)) => path,
-            Ok(DebouncedEvent::Error(e, maybe_path)) => {
-                eprintln!("fs watch error: {} ({:?})", e, maybe_path);
-                continue;
-            },
-            Ok(_) => continue,
+    'rewatch: loop {
+        let (tx, rx) = mpsc::channel();
+        let mut watcher: RecommendedWatcher = match Watcher::new(tx, Duration::from_secs(2)) {
+            Ok(watcher) => watcher,
             Err(e) => {
-                eprintln!("fs watch error: {}, quitting", e);
-                break;
+                eprintln!("Cannot create fs watcher: {} - Hotswapping will not work", e);
+                return;
             }
         };
-        callback(path);
+        if let Err(e) = watcher.watch(&src, RecursiveMode::Recursive) {
+            eprintln!("Cannot watch {:?}: {} - Hotswapping will not work", src, e);
+            return;
+        }
+
+        loop {
+            match rx.recv() {
+                Ok(DebouncedEvent::Write(path)) => callback(path),
+                Ok(DebouncedEvent::Remove(path)) => {
+                    // gedit saves files by deleting it and then creating the modified version.
+                    // when the watchpoint is removed the watcher will not receive new events,
+                    // so we need to restart it.
+                    // an alternative solution would be to always watch a directory, but then we would get events
+                    // for target/ too and would need to filter.
+                    // path is absolute, so check if it ends
+                    if path.ends_with(src) {
+                        callback(path); // hope the file is saved again before the compiler reads it
+                        continue 'rewatch;
+                    }
+                }
+                Ok(DebouncedEvent::Error(e, maybe_path)) => {
+                    eprintln!("fs watch error: {} ({:?})", e, maybe_path);
+                }
+                Err(e) => {
+                    eprintln!("fs watch error: {}, quitting", e);
+                    return;
+                }
+                //Ok(e) => println!("other watch event: {:?}", e)
+                //Ok(_) => {}
+            }
+        }
     }
 }
 
@@ -343,7 +356,7 @@ impl FunctionGetter {
                 println!("Watching {:?} for source code changes", &src);
                 println!("command: {:?}", &command);
                 watch(&src, &mut|_| {
-                    match command.status() {
+                    match command.status() {// runs the command
                         Ok(exit) if exit.success() => {},
                         Ok(_) => return,// cargo printed error
                         Err(e) => {
