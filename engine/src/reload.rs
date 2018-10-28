@@ -34,9 +34,53 @@ Solution (i hope): inv.get("outputs")?.as_array()?.first()?
 ["links"] might be even better as it has the target name too
 */
 
+fn run_custom_build_steps(build_plan: &serde_json::Value) -> Option<Vec<String>> {
+    let mut more_args = Vec::new();
+    for step in build_plan.get("invocations")?.as_array()? {
+        if step.get("target_kind")?.as_array()?.first()?.as_str()? != "custom-build" {
+            continue;
+        }
+        if step.get("program")?.as_str()? == "rustc" {
+            continue; // the compile step for build.rs
+        }
+        println!("Running custom build step for {}", step.get("package_name")?.as_str()?);
+        let program = step.get("program")?.as_str()?;
+        let args = step.get("args")?.as_array()?.iter()
+            .map(|value| value.as_str() ).collect::<Option<Vec<_>>>()?;
+        let envs = step.get("env")?.as_object()?.iter()
+            .map(|(var,v)| v.as_str().map(|value| (var,value) ) )
+            .collect::<Option<Vec<_>>>()?;
+        let dir = step.get("cwd").and_then(|v| v.as_str() )?;
+        let mut command = Command::new(program);
+        command.current_dir(dir);
+        command.args(args);
+        command.envs(envs);
+        let output = command.output().ok()?;
+        if !output.status.success() {
+            eprintln!("\t\"{}\" failed with exit code {:?}:", program, output.status);
+            let _ = io::stderr().write(&output.stderr);
+            continue;
+        }
+        let stdout = String::from_utf8(output.stdout).ok()?;
+        for line in stdout.lines() {
+            println!("\t{}", line);
+            if let Some(split) = line.find('=') {
+                let k = line[..split].trim();
+                if k == "cargo:rustc-link-search" {
+                    let v = line[split+1..].trim();
+                    println!("\tAdding \"-L\" \"{}\"", v);
+                    more_args.push("-L".to_string());
+                    more_args.push(v.to_string());
+                }
+            }
+        }
+    }
+    Some(more_args)
+}
+
 /// Turns the equivalent of `jq '.invocations | .[-1] | {env,cwd,program,args,outputs}'`
 /// (from --build-plan JSON) into a Command, and also gets the source code root from args.
-fn extract_final_rustc(build_plan: serde_json::Value) -> Option<(PathBuf,Command,String,String)> {
+fn extract_final_rustc(build_plan: &serde_json::Value) -> Option<(PathBuf,Command,String,String)> {
     // build_plan.invocations.[-1].args: [str] is the only required field
     // print warnings when the other fields are missing or malformed
     let inv = build_plan.get("invocations")?.as_array()?.last()?.as_object()?;
@@ -58,8 +102,6 @@ fn extract_final_rustc(build_plan: serde_json::Value) -> Option<(PathBuf,Command
         eprintln!("Build plan step is missing \"program\" (or it's not a string), assuming `rustc`");
         "rustc"
     });
-    let mut command = Command::new("strace");
-    command.arg(program);
     let mut command = Command::new(program);
     command.args(&args);
 
@@ -164,10 +206,16 @@ fn get_compile_command(cargo_args: &[OsString]) -> Option<(PathBuf,Command,Strin
             return Some(default_cargo(cargo_args));
         }
     };
-    Some(extract_final_rustc(json).unwrap_or_else(|| {
+    if let Some((src, mut command, exe, link)) = extract_final_rustc(&json) {
+        match run_custom_build_steps(&json) {
+            Some(args) => {command.args(args);}
+            None => {eprintln!("Parsing custom build steps failed, trying without");}
+        }
+        Some((src,command,exe,link))
+    } else {
         eprint!("Could not get rustc command from build plan, ");
-        default_cargo(cargo_args)
-    }))
+        Some(default_cargo(cargo_args))
+    }
 }
 
 fn get_exe() -> Option<String> {
