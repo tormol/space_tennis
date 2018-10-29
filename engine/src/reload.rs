@@ -9,7 +9,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering::*};
 use std::sync::{mpsc, Arc};
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, Instant};
 use dlopen::raw::Library;
 use notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
 
@@ -496,8 +496,10 @@ impl FunctionGetter {
         let f_clone = f.clone();
         thread::spawn(move|| {
             let functions = f_clone;
+            let started = Instant::now();
             // Don't delay game start on getting the build plan
             if let Some(b) = get_compile_info(cargo_args) {
+                println!("Collected build info in {:?}", started.elapsed());
                 let BuildInfo { src_root, exe, link, command } = b;
                 println!("Watching {:?} for source code changes", &src_root);
                 let mut command = command.create();
@@ -507,6 +509,7 @@ impl FunctionGetter {
                     // TODO add minimum delay between successful recompiles,
                     // maybe cancel running compiles (although that might corrupt
                     //  incremental builds?)
+                    let started = Instant::now();
                     match command.status() {// runs the command
                         Ok(exit) if exit.success() => {},
                         Ok(_) => return,// cargo printed error
@@ -528,6 +531,7 @@ impl FunctionGetter {
                         let after = new_functions;
                         println!("before: mouse_press={:p}->{:p}", before, before.mouse_press);
                         println!("after : mouse_press={:p}->{:p}", after, after.mouse_press);
+                        println!("Loaded new code in {:?}", started.elapsed());
                     }
                 });
             }
