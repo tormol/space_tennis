@@ -24,6 +24,7 @@ pub use common::{Graphics,MouseButton,Color,Matrix2d,Game,Functions,StartUpInfo}
 mod reload;
 #[cfg(not(debug_assertions))]
 mod reload {
+    use ::Functions;
     pub struct FunctionGetter(Functions);
     impl FunctionGetter {
         pub fn new(f: Functions,  _: Vec<Box<str>>) -> Self {
