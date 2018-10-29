@@ -1,39 +1,146 @@
 use common::*;
 
-use std::path::{Path, PathBuf};
-use std::ffi::OsString;
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::{env, fs};
 use std::io::{self, Write, ErrorKind::*};
-use std::sync::{mpsc, Arc};
-use std::time::Duration;
-use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering::*};
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering::*};
+use std::sync::{mpsc, Arc};
 use std::thread;
-extern crate dlopen;
-use self::dlopen::raw::Library;
-extern crate notify;
-use self::notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
-extern crate serde_json;
+use std::time::{Duration, SystemTime};
+use dlopen::raw::Library;
+use notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
 
-/*
-using rustc isn't working - the build plan is missing ["-L", "native=/home/tbm/p/rust/space_tennis/target/debug/build/libloading-d2593e82793bee08/out"]
-(which cargo build --verbose shows)
-and target/debug/space_tennis isn't modified
-I think it has something to do with rustup, ive set override nightly, so that all invocations are at least using the same version (or?)
-somehow the hard-link-to-reload doesn't work either (loads the same address)
-    it works once (because looking in different dir?)
-it works with cargo build, repeatedly
-strace creates too much noise
+/// A std::process::Command that can be (de)serialized
+///
+/// Doesn't store any info about what to do with the streams either.
+///
+/// Uses str instead of OsStr/Path becaue serde doesn't handle those correctly,
+/// and cargo rejects non-UTF8 paths and arguments.
+#[derive(Serialize,Deserialize, Clone)]
+struct SerializableCommand {
+    program: String,
+    args: Vec<Box<str>>,
+    env: HashMap<Box<str>,Box<str>>,
+    cwd: Option<Box<str>>,
+}
+impl SerializableCommand {
+    pub fn new(name: &str) -> Self {
+        SerializableCommand {
+            program: name.into(),
+            args: Vec::new(),
+            env: HashMap::new(),
+            cwd: None
+        }
+    }
+    pub fn args<A:AsRef<str>, I:IntoIterator<Item=A>>
+    (&mut self,  args: I) -> &mut Self {
+        self.args.extend(args.into_iter().map(|a| a.as_ref().into() ));
+        return self;
+    }
+    pub fn env(&mut self,  k: &str,  v: &str) -> &mut Self {
+        self.env.insert(k.into(), v.into());
+        return self;
+    }
+    pub fn current_dir(&mut self,  dir: &str) -> &mut Self {
+        self.cwd = Some(dir.into());
+        return self;
+    }
+    pub fn create(&self) -> Command {
+        let mut cmd = Command::new(&self.program);
+        cmd.args(self.args.iter().map(|a| a.as_ref() ));
+        cmd.envs(self.env.iter().map(|(k,v)| (k.as_ref(), v.as_ref()) ));
+        if let Some(ref dir) = self.cwd {
+            cmd.current_dir(dir.as_ref());
+        }
+        cmd
+    }
+}
 
-curren theory: i think rustc puts the exe in target/debug/deps/
-and that cargo copies it into target/debug
-adding -o current_exe() conflicts with --out-dir .../deps/
-(warning) and doesn't fix it completely:
-    an -ID is appended to the exe (from -C extra-filename= or -C metadata=)
-Solution (i hope): inv.get("outputs")?.as_array()?.first()?
-["links"] might be even better as it has the target name too
-*/
 
+/// Information that is used to invalidate the cached rustc commmand
+#[derive(Serialize,Deserialize, PartialEq,Eq, Debug, Clone)]
+struct BuildState<'a> {
+    lock_timestamp: SystemTime,
+    compiler_version: String,
+    cargo_args: Cow<'a,[Box<str>]>,
+}
+impl<'a> BuildState<'a> {
+    fn current(cargo_args: &'a[Box<str>]) -> Option<Self> {
+        let lock_timestamp = match fs::metadata("Cargo.lock").and_then(|m| m.modified() ) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("Cannot save cache: Cannot get timestamp for Cargo.lock: {}", e);
+                return None;
+            }
+        };
+        let compiler_version = match Command::new("rustc").arg("--version").output() {
+            // ignore exit status; --version is unlikely to not work
+            Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),// there is no allocation-reusing
+            Err(e) => {
+                eprintln!("Cannot cache rustc command: Cannot run `rustc`: {}", e);
+                return None;
+            }
+        };
+        let cargo_args = Cow::Borrowed(cargo_args);
+        Some(BuildState { lock_timestamp, compiler_version, cargo_args })
+    }
+}
+
+/// Everything that is needed for watching for changes and reloading
+#[derive(Serialize,Deserialize, Clone)]// Clone required by Cow, but is never useed
+struct BuildInfo {
+    // using Arc requires enabling serde's "rc" feature
+    command: SerializableCommand,
+    src_root: String,
+    exe: String,
+    link: String,
+}
+
+/// What is saved to disk.
+///
+/// The types have been designed to avoid invalid states after successful deserialization.
+#[derive(Serialize,Deserialize)]
+struct CacheInfo<'a> {
+    check: Cow<'a,BuildState<'a>>,
+    build: Cow<'a,BuildInfo>,
+}
+impl<'a> CacheInfo<'a> {
+    const FILE: &'static str = "target/reload-cache.json";
+    fn read() -> Option<Self> {
+        match fs::read(CacheInfo::FILE) {
+            Ok(contents) => match serde_json::from_slice(&contents) {
+                Ok(cached) => Some(cached),
+                Err(e) => {
+                    eprintln!("Cache file {} could not be deserialized: {}", CacheInfo::FILE, e);
+                    None
+                }
+            }
+            Err(e) => {
+                if e.kind() != NotFound {
+                    eprintln!("Cache file {} could not be read: {}", CacheInfo::FILE, e);
+                }
+                None
+            }
+        }
+    }
+    fn save(build: &BuildInfo,  current: &BuildState) {
+        let contents = serde_json::to_string_pretty(&CacheInfo {
+            build: Cow::Borrowed(build),
+            check: Cow::Borrowed(current),
+        }).expect("serialization to be infallible");
+        if let Err(e) = fs::write(CacheInfo::FILE, contents) {
+            eprintln!("Failed to write cache file {}: {}", CacheInfo::FILE, e);
+        } else {
+            eprintln!("Cached compile command for future runs");
+            eprintln!("\t(It is automatically invalidated by changes to Cargo.lock, rustc version or cargo args.)");
+        }
+    }
+}
+
+/// Returns a list of extra command args on success
 fn run_custom_build_steps(build_plan: &serde_json::Value) -> Option<Vec<String>> {
     let mut more_args = Vec::new();
     for step in build_plan.get("invocations")?.as_array()? {
@@ -80,7 +187,7 @@ fn run_custom_build_steps(build_plan: &serde_json::Value) -> Option<Vec<String>>
 
 /// Turns the equivalent of `jq '.invocations | .[-1] | {env,cwd,program,args,outputs}'`
 /// (from --build-plan JSON) into a Command, and also gets the source code root from args.
-fn extract_final_rustc(build_plan: &serde_json::Value) -> Option<(PathBuf,Command,String,String)> {
+fn extract_final_rustc(build_plan: &serde_json::Value) -> Option<BuildInfo> {
     // build_plan.invocations.[-1].args: [str] is the only required field
     // print warnings when the other fields are missing or malformed
     let inv = build_plan.get("invocations")?.as_array()?.last()?.as_object()?;
@@ -102,7 +209,7 @@ fn extract_final_rustc(build_plan: &serde_json::Value) -> Option<(PathBuf,Comman
         eprintln!("Build plan step is missing \"program\" (or it's not a string), assuming `rustc`");
         "rustc"
     });
-    let mut command = Command::new(program);
+    let mut command = SerializableCommand::new(program);
     command.args(&args);
 
     if let Some(wd) = inv.get("cwd").and_then(|v| v.as_str() ) {
@@ -130,41 +237,45 @@ fn extract_final_rustc(build_plan: &serde_json::Value) -> Option<(PathBuf,Comman
     // currently set in .cargo/config, as it works better
     // adding --verbose doesn't make it print anything
     command.args(&["-C","link-args=-Wl,-export-dynamic"]);
-    // --build-plan forgets this
-    //command.args(&["-L","native=/home/tbm/p/rust/space_tennis/target/debug/build/libloading-d2593e82793bee08/out"]);
 
     // If the program root is inside a subdirectory (like src/), watch the
     // entire directoy, otherwise, assume it's a single file and only watch it.
     // Use Path to split directories properly. The path is guaranteed to be
     // unicode because cargo fails otherwise.
-    let watch = match args.iter().find(|arg| arg.ends_with(".rs") ) {
+    let src_root = match args.iter().find(|arg| arg.ends_with(".rs") ) {
         Some(main) => {
             let path = Path::new(main);
-            path.parent().filter(|&p| p != Path::new("") ).unwrap_or(path).to_owned()
+            let path = path.parent().filter(|&p| p != Path::new("") ).unwrap_or(path);
+            path.to_str().unwrap().to_string()
         }
         None => {
             eprintln!("no .rs file in {} invocation, falling back to watching src/", program);
-            PathBuf::from("src")
+            "src".to_string()
         }
     };
-    Some((watch,command,exe,link))
+    Some(BuildInfo { src_root, command, exe, link })
 }
 
 /// Fallback when getting or parsing a build plan fails
-fn default_cargo(cargo_args: &[OsString]) -> (PathBuf,Command,String,String) {
+fn default_cargo(cargo_args: &[Box<str>]) -> BuildInfo {
     eprintln!("falling back to using `cargo build` and looking for changes in src/");
-    let mut cargo = Command::new("cargo");
-    cargo.arg("build");
-    //cargo.arg("--verbose");
+    let mut cargo = SerializableCommand::new("cargo");
+    cargo.args(&["build"]);
+    //cargo.args(&["--verbose"]);
     cargo.args(cargo_args);
     // see extract_final_rustc()
     cargo.env("RUSTFLAGS", "-C link-args=-Wl,-export-dynamic");
-    (PathBuf::from("src"), cargo, get_exe().unwrap(), get_exe().unwrap())
+    BuildInfo {
+        command: cargo,
+        src_root: "src".to_string(),
+        link: get_exe().unwrap(),
+        exe: get_exe().unwrap(),
+    }
 }
 
 
 /// Get command to compile the final executable assuming unchanged dependencies
-/// Tries to extract a command from a nightly cargo --build-plan, but falls
+/// Tries to extract a command from a nightly `cargo --build-plan`, but falls
 /// back to the slower `cargo build` on errors.
 /// Prints errors and warnings to stderr
 ///
@@ -172,27 +283,27 @@ fn default_cargo(cargo_args: &[OsString]) -> (PathBuf,Command,String,String) {
 /// a) it might not be installed, and having two paths complicate the code.
 /// b) would not allow people to use a specific nightly.
 /// c) build plan has toolchain-specific --incremental arguments and .rlib IDs,
-///    which means you need to build with the same (nightly) toolchain,
+///    which means you need to build with the same (nightly) toolchain;
 ///    people need to build the initial binary as nightly as loading a library
 ///    compiled with different compiler is a bad idea.
 ///
 /// FIXME: try without "-Zunstable-options", (but that complicates the code)
-fn get_compile_command(cargo_args: &[OsString]) -> Option<(PathBuf,Command,String,String)> {
+fn from_build_plan(cargo_args: &[Box<str>]) -> Result<BuildInfo,bool> {
     let output = Command::new("cargo")
         .args(&["build","-Zunstable-options","--build-plan"])
-        .args(cargo_args)
+        .args(cargo_args.iter().map(|s| s.as_ref() ))
         .output();
     let stdout = match output {
         Err(e) => {
-            eprintln!("Cannot run cargo: {}, giving up reloading", &e);
-            return None;
+            eprintln!("Cannot run cargo: {}", &e);
+            return Err(false);
         }
         Ok(ref output) if !output.status.success() => {
             eprintln!("`cargo --build-plan` failed (");
             let _ = io::stderr().write(&output.stderr);
             eprint!("), --build-plan requires a nightly toolchain, ");
             eprintln!("You might want to run `rustup override set nightly`.");
-            return Some(default_cargo(cargo_args));
+            return Err(true);
         }
         Ok(output) => {
             let _ = io::stderr().write(&output.stderr);
@@ -203,21 +314,48 @@ fn get_compile_command(cargo_args: &[OsString]) -> Option<(PathBuf,Command,Strin
         Ok(json) => json,
         Err(_) => {
             eprint!("Build plan is not JSON, ");
-            return Some(default_cargo(cargo_args));
+            return Err(true);
         }
     };
-    if let Some((src, mut command, exe, link)) = extract_final_rustc(&json) {
+    if let Some(mut build_info) = extract_final_rustc(&json) {
         match run_custom_build_steps(&json) {
-            Some(args) => {command.args(args);}
-            None => {eprintln!("Parsing custom build steps failed, trying without");}
+            Some(args) => {build_info.command.args(args);}
+            None => eprintln!("Parsing custom build steps failed, trying without.")
         }
-        Some((src,command,exe,link))
+        Ok(build_info)
     } else {
         eprint!("Could not get rustc command from build plan, ");
-        Some(default_cargo(cargo_args))
+        Err(true)
     }
 }
 
+/// Read from cache if possible, parse
+fn get_compile_info(cargo_args: Vec<Box<str>>) -> Option<BuildInfo> {
+    let current_bs = BuildState::current(&cargo_args);
+    if let Some(CacheInfo { check: cached_bs,  build: build_info }) = CacheInfo::read() {
+        if let Some(ref current_bs) = &current_bs {
+            if &*cached_bs == current_bs {
+                return Some(build_info.into_owned());
+            }
+            println!("Cannot use cached compile command due to changed state:");
+            println!("cached: {:#?}", cached_bs);
+            println!("now: {:#?}", current_bs);
+        } else {
+            println!("Cannot use cached compile command due to unknown state");
+        }
+    }
+    let build_info = match from_build_plan(&cargo_args) {
+        Ok(build_info) => build_info,
+        Err(true) => return Some(default_cargo(&cargo_args)), // don't try to cache
+        Err(false) => return None,
+    };
+    if let Some(build_state) = current_bs {
+        CacheInfo::save(&build_info, &build_state);
+    }
+    Some(build_info)
+}
+
+/// Wrapper around std::env::current_exe() that removes junk, ensures UTF-8 and prints errors.
 fn get_exe() -> Option<String> {
     let path = match env::current_exe() {
         Ok(path) => path,
@@ -241,6 +379,11 @@ fn get_exe() -> Option<String> {
     Some(path)
 }
 
+
+/// Load exe as a dynamic library, get the new function pointers
+/// and do some trivial sanity checks.
+///
+/// This is kinda unsafe but the unsafety must end somewhere.
 fn reload(exe: &str,  current_size: usize) -> Option<&'static Functions> {
     static ITERATIONS: AtomicUsize = AtomicUsize::new(1);
     // (on linux) dlopen refuses to open the same path multiple times
@@ -279,7 +422,7 @@ fn reload(exe: &str,  current_size: usize) -> Option<&'static Functions> {
         let symbol: Result<&Functions, _> = lib.symbol("GAME");
         match symbol {
             Ok(ref game) if game.size == current_size => {
-                // leak the handle because unloading is very risky,
+                // leak the handle because unloading is very risky.
                 // this should only happen a limited number of times,
                 // and restarting isn't that bad either
                 Box::leak(Box::new(lib));
@@ -298,10 +441,12 @@ fn reload(exe: &str,  current_size: usize) -> Option<&'static Functions> {
     }
 }
 
-fn watch(src: &Path,  callback: &mut dyn FnMut(PathBuf)) {
+
+/// Watch for changes in / to src and call a function per change per second
+fn watch(src: &str,  callback: &mut dyn FnMut(PathBuf)) {
     'rewatch: loop {
         let (tx, rx) = mpsc::channel();
-        let mut watcher: RecommendedWatcher = match Watcher::new(tx, Duration::from_secs(2)) {
+        let mut watcher: RecommendedWatcher = match Watcher::new(tx, Duration::from_secs(1)) {
             Ok(watcher) => watcher,
             Err(e) => {
                 eprintln!("Cannot create fs watcher: {} - Hotswapping will not work", e);
@@ -346,17 +491,22 @@ fn watch(src: &Path,  callback: &mut dyn FnMut(PathBuf)) {
 pub struct FunctionGetter(Arc<AtomicPtr<Functions>>);
 impl FunctionGetter {
     #[inline(never)]
-    pub fn new(f: Functions,  cargo_args: Vec<OsString>) -> Self {
+    pub fn new(f: Functions,  cargo_args: Vec<Box<str>>) -> Self {
         let f = Arc::new(AtomicPtr::new(Box::leak(Box::new(f))));
         let f_clone = f.clone();
         thread::spawn(move|| {
             let functions = f_clone;
             // Don't delay game start on getting the build plan
-            if let Some((src, mut command, exe, link)) = get_compile_command(&cargo_args) {
+            if let Some(b) = get_compile_info(cargo_args) {
+                let BuildInfo { src_root, exe, link, command } = b;
+                println!("Watching {:?} for source code changes", &src_root);
+                let mut command = command.create();
                 //command = default_cargo(&cargo_args).1;
-                println!("Watching {:?} for source code changes", &src);
                 println!("command: {:?}", &command);
-                watch(&src, &mut|_| {
+                watch(&src_root, &mut|_| {
+                    // TODO add minimum delay between successful recompiles,
+                    // maybe cancel running compiles (although that might corrupt
+                    //  incremental builds?)
                     match command.status() {// runs the command
                         Ok(exit) if exit.success() => {},
                         Ok(_) => return,// cargo printed error

@@ -2,7 +2,17 @@
 //#![cfg_attr(feature="dyn", crate_type = "dylib")]
 //#![crate_type = "dylib"]
 
-use std::ffi::OsString;
+#[cfg(debug_assertions)]
+extern crate dlopen;
+#[cfg(debug_assertions)]
+extern crate notify;
+#[cfg(debug_assertions)]
+extern crate serde_json;
+#[cfg(debug_assertions)]
+#[macro_use] extern crate serde_derive;
+#[cfg(debug_assertions)]
+extern crate serde;
+
 use std::borrow::Cow;
 use std::os::raw::c_void;
 use std::mem::{transmute,size_of};
@@ -16,7 +26,7 @@ mod reload;
 mod reload {
     pub struct FunctionGetter(Functions);
     impl FunctionGetter {
-        pub fn new(f: Functions,  _: Vec<OsString>) -> Self {
+        pub fn new(f: Functions,  _: Vec<Box<str>>) -> Self {
             FunctionGetter(f)
         }
         pub fn get(&self) -> &Functions {
@@ -29,7 +39,7 @@ mod piston;
 pub use piston::hex;
 
 
-pub fn start<G:Game, S:Into<Cow<'static,str>>, A:Into<Vec<OsString>>>
+pub fn start<G:Game, S:Into<Cow<'static,str>>, A:Into<Vec<Box<str>>>>
 (game: &mut G,  name: S,  initial_size: [f64;2],  cargo_args: A) {
     unsafe {
         let f = Functions {
