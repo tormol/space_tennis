@@ -48,6 +48,8 @@ const MAX_MISSES: u32 = (ARENA[1]/(3.0*MISS_BALL_RADIUS)) as u32;
 const RACKET_SIZE: [f64;2] = [0.22, 0.15];
 const PLAYER_MAX_SPEED: [f64;2] = [0.9, 0.9];
 const OPPONENT_MAX_SPEED: [f64;2] = [0.4, 0.4];
+const PLAYER_RESTART_DELAY: f64 = 0.2; // of ARENA[2]
+const OPPONENT_RESTART_DELAY: f64 = 0.3; // of ARENA[2]
 const BALL_START_ZSPEED: f64 = 0.6;
 const BALL_ZSPEED_LEVEL_ADD: f64 = 0.02;
 const BRACKET_SPEED_TRANSFER: f64 = 0.75; // based on mass of ball and bracket
@@ -113,6 +115,31 @@ impl Game {
         // at x distance the viewable area*FRONT_FILLS is ARENA[0] =>
         // 2*view_distance*tan(fov/2)*FRONT_FILLS=ARENA[0]
         let view_distance = ARENA[0]/(2.0*FRONT_FILLS*f64::tan(FOV/2.0));
+
+        // order depends on its z position
+        fn draw_ball(
+                ball_pos_game: [f64;3],  view_distance: f64,
+                transform: [[f64;3];2],  gfx: &mut GlGraphics
+        ) {
+            let ball_color = color::hex(BALL_COLOR);
+            let ball_viewable = 2.0*(view_distance+ball_pos_game[2])*f64::tan(FOV/2.0);
+            let ball_depth_frac = (ARENA[0]/ball_viewable, ARENA[1]/ball_viewable);
+            let ball_offset = (0.5 - ball_depth_frac.0/2.0,  0.5 - ball_depth_frac.1/2.0);
+            let ball_pos_screen = (
+                ball_offset.0 + ball_depth_frac.0*ball_pos_game[0],
+                ball_offset.1 + ball_depth_frac.1*ball_pos_game[1]
+            );
+            let ball_frac = BALL_RADIUS*2.0 / ball_viewable;
+            let ball_rect = [
+                ball_pos_screen.0 - ball_frac/2.0,
+                ball_pos_screen.1 - ball_frac/2.0,
+                ball_frac, ball_frac
+            ];
+            draw::ellipse(ball_color, ball_rect, transform, gfx);
+        }
+        if self.ball_pos[2] > ARENA[2] {
+            draw_ball(self.ball_pos, view_distance, transform, gfx);
+        }
 
         fn draw_wall_marker(
                 color: &str,  depth: f64,  width: f64,
@@ -186,16 +213,11 @@ impl Game {
         // opponent racket
         draw_racket(self.opponent_pos, view_distance+ARENA[2], transform, gfx);
 
-        // step 5: ball
-        draw_wall_marker(BALL_LINE_COLOR, view_distance+self.ball_pos[2], LINE_WIDTH, transform, gfx);
-        let ball_color = color::hex(BALL_COLOR);
-        let ball_viewable = 2.0*(view_distance+self.ball_pos[2])*f64::tan(FOV/2.0);
-        let ball_depth_frac = (ARENA[0]/ball_viewable, ARENA[1]/ball_viewable);
-        let ball_offset = (0.5 - ball_depth_frac.0/2.0,  0.5 - ball_depth_frac.1/2.0);
-        let ball_pos = (ball_offset.0 + ball_depth_frac.0*self.ball_pos[0],  ball_offset.1 + ball_depth_frac.1*self.ball_pos[1]);
-        let ball_frac = BALL_RADIUS*2.0 / ball_viewable;
-        let ball_rect = [ball_pos.0-ball_frac/2.0, ball_pos.1-ball_frac/2.0, ball_frac, ball_frac];
-        draw::ellipse(ball_color, ball_rect, transform, gfx);
+        // step 5: ball inside arena
+        if self.ball_pos[2] <= ARENA[2]  &&  self.ball_pos[2] >= 0.0 {
+            draw_wall_marker(BALL_LINE_COLOR, view_distance+self.ball_pos[2], LINE_WIDTH, transform, gfx);
+            draw_ball(self.ball_pos, view_distance, transform, gfx);
+        }
 
         // player racket
         draw_racket(self.player_pos, view_distance, transform, gfx);
@@ -229,6 +251,10 @@ impl Game {
             let horizontal = [opponent_x, top+radius_frac*2.0/3.0, radius_frac*2.0, radius_frac*2.0/3.0];
             draw::rectangle(miss_color, vertical, transform, gfx);
             draw::rectangle(miss_color, horizontal, transform, gfx);
+        }
+
+        if self.ball_pos[2] < 0.0 {
+            draw_ball(self.ball_pos, view_distance, transform, gfx);
         }
 
         if self.state == State::Paused {
@@ -293,7 +319,9 @@ impl Game {
             // check boundaries and bounce / gameover
             let moved = [self.ball_vel[0]*dt, self.ball_vel[1]*dt, self.ball_vel[2]*dt];
             let mut pos = [self.ball_pos[0]+moved[0], self.ball_pos[1]+moved[1], self.ball_pos[2]+moved[2]];
-            if pos[2] < 0.0 {
+            // check for score. allow the ball to leave the arena for a bit so that it doesn't
+            // look like a bug
+            if pos[2] < -ARENA[2]*PLAYER_RESTART_DELAY {
                 // game over, restart
                 self.player_misses += 1;
                 self.ball_pos = [self.player_pos[0], self.player_pos[1], BALL_RADIUS];
@@ -301,12 +329,17 @@ impl Game {
                 self.ball_vel = [0.0, 0.0, -z_speed+BALL_ZSPEED_LEVEL_ADD];
                 self.state = State::PlayerStart;
                 return;
-            } else if pos[2] > ARENA[2] {
+            } else if pos[2] > ARENA[2]*(1.0+OPPONENT_RESTART_DELAY) {
                 self.opponent_misses += 1;
                 self.ball_pos = [self.opponent_pos[0], self.opponent_pos[1], ARENA[2]-BALL_RADIUS];
                 let z_speed = self.ball_vel[2];
                 self.ball_vel = [0.0, 0.0, -z_speed-BALL_ZSPEED_LEVEL_ADD];
                 self.state = State::OpponentStart;
+                return;
+            } else if pos[2] < 0.0  ||  pos[2] > ARENA[2] {
+                // update pos but don't do wall or racket interaction
+                self.ball_pos = pos;
+                self.opponent();
                 return;
             }
             if pos[0] < BALL_RADIUS {
