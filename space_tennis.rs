@@ -377,7 +377,6 @@ fn main() {
     let window_size = [INITIAL_SIZE[0] as u32, INITIAL_SIZE[1] as u32];
     let mut window: PistonWindow = WindowSettings::new("space tennis", window_size)
         .vsync(true)
-        .opengl(OpenGL::V3_2)
         .build()
         .unwrap();
     let mut gfx = GlGraphics::new(OpenGL::V3_2);
@@ -421,13 +420,13 @@ fn main() {
                     state: ButtonState::Press,
                     button: Button::Mouse(button),
                     ..
-            })) => {
+            }), _) => {
                 game.mouse_press(button);
             }
-            Event::Input(Input::Move(Motion::MouseCursor(x,y))) => {
+            Event::Input(Input::Move(Motion::MouseCursor([x,y])), _) => {
                 game.mouse_move([x/size[0], y/size[1]]);
             }
-            // TODO pause when window loses focos (!= mouse leaves)
+            // TODO pause when window loses focus (!= mouse leaves)
             _ => {}
         }
     }
