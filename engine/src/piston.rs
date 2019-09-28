@@ -50,7 +50,6 @@ pub fn start(s: StartUpInfo,  functions: FunctionGetter) {
     let window_size = [s.initial_size[0] as u32, s.initial_size[1] as u32];
     let mut window: PistonWindow = WindowSettings::new(s.name.to_owned(), window_size)
         .vsync(true)
-        .opengl(OpenGL::V3_2)
         .build()
         .unwrap();
     let mut g = GlGraphics::new(OpenGL::V3_2);
@@ -94,13 +93,13 @@ pub fn start(s: StartUpInfo,  functions: FunctionGetter) {
                     state: ButtonState::Press,
                     button: Button::Mouse(button),
                     ..
-            })) => {
+            }), _) => {
                 unsafe{ (f.mouse_press)(s.game, map_button(button)) };
             }
-            Event::Input(Input::Move(Motion::MouseCursor(x,y))) => {
+            Event::Input(Input::Move(Motion::MouseCursor([x,y])), _) => {
                 unsafe{ (f.mouse_move)(s.game, [x/size[0], y/size[1]]) };
             }
-            // TODO pause when window loses focos (!= mouse leaves)
+            // TODO pause when window loses focus (!= mouse leaves)
 
             _ => {}
         }

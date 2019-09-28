@@ -16,9 +16,9 @@ license = "Apache-2 / MIT"
 crate-type = ["dylib"]
 
 [dependencies]
-piston_window = "0.82"
-pistoncore-glutin_window = "0.48"
-piston2d-opengl_graphics = "0.54"
+piston_window = "0.105"
+pistoncore-glutin_window = "0.63"
+piston2d-opengl_graphics = "0.69"
 
 [target.'cfg(debug_assertions)'.dependencies]
 dlopen = "0.1"
