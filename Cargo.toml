@@ -7,6 +7,8 @@ repository = "https://gitlab.com/torbmol/space_tennis"
 authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
 license = "GPL-3.0-or-later"
 
+default-run = "space_tennis"
+
 [[bin]]
 name = "space_tennis"
 path = "space_tennis.rs"
