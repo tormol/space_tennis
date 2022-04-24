@@ -57,7 +57,7 @@ const FOV: f64 = PI/3.0; // 60°
 const FRONT_FILLS: f64 = 0.8; // of the screen
 //const BACK_FILLS: f64 = 0.3; // of the screen
 
-const WALL_COLOR: &str = "222222f8";
+const WALL_COLOR: &str = "222332f8";
 const WALL_LINE_COLOR: &str = "008800";
 const WALL_LINES: u32 = 5;
 const LINE_WIDTH: f64 = 0.05;
