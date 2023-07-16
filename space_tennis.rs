@@ -38,8 +38,6 @@ mod draw {
     pub use piston_window::{clear,rectangle,line,ellipse};
 }
 
-extern crate glutin_window;
-
 const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
 const ARENA: [f64;3] = [1.0, 1.0, 2.0]; // 
 const BALL_RADIUS: f64 = 0.125; // exact representable
