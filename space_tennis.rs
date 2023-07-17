@@ -22,16 +22,19 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use std::f32::consts::PI;
+use std::time::Instant;
 
 extern crate speedy2d;
 use speedy2d::{Graphics2D, Window};
 use speedy2d::color::Color;
-use speedy2d::dimen::{UVec2, Vec2, Vector2};
+use speedy2d::dimen::Vector2;
 use speedy2d::shape::Rectangle;
 use speedy2d::window::{
     MouseButton,
+    WindowCreationOptions,
     WindowHandler,
     WindowHelper,
+    WindowSize,
 };
 
 const INITIAL_SIZE: [f32;2] = [500.0, 500.0];
@@ -50,24 +53,6 @@ const BRACKET_SPEED_TRANSFER: f32 = 0.75; // based on mass of ball and bracket
 const FOV: f32 = PI/3.0; // 60°
 const FRONT_FILLS: f32 = 0.8; // of the screen
 //const BACK_FILLS: f32 = 0.3; // of the screen
-
-fn rgb(hex: u32) -> Color {
-    if hex >> 24 != 0 {
-        panic!("value should not be more than 6 hex digits");
-    }
-    let r = (hex >> 16) as f32 / 255.0;
-    let g = ((hex >> 8) & 0xff) as f32 / 255.0;
-    let b = (hex & 0xff) as f32 / 255.0;
-    Color::from_rgb(r, g, b)
-}
-
-fn argb(hex: u32) -> Color {
-    let a = (hex >> 24) as f32 / 255.0;
-    let r = ((hex >> 16) & 0xff) as f32 / 255.0;
-    let g = ((hex >> 8) & 0xff) as f32 / 255.0;
-    let b = (hex & 0xff) as f32 / 255.0;
-    Color::from_rgba(r, g, b, a)
-}
 
 #[track_caller]
 fn hex(mut color: &str) -> Color {
@@ -106,9 +91,9 @@ fn clamp(p: f32,  (min,max): (f32,f32)) -> f32 {
     else               {p}
 }
 
-const fn rect(x: f32,  y: f32,  width: f32,  height: f32) -> Rectangle {
+fn rect(x: f32,  y: f32,  width: f32,  height: f32) -> Rectangle {
     let top_left = Vector2::new(x, y);
-    let bottom_right = Vector2::new(width, height);
+    let bottom_right = Vector2::new(x+width, y+height);
     Rectangle::new(top_left, bottom_right)
 }
 
@@ -117,6 +102,7 @@ enum State {Playing, Paused, PlayerStart, OpponentStart}
 
 struct Game {
     window_size: [f32; 2], // changes if window is resized
+    last_physics: Instant,
     ball_pos: [f32; 3],
     ball_vel: [f32; 3],
     player_pos: [f32; 2],
@@ -130,6 +116,7 @@ struct Game {
 impl Game {
     fn new() -> Self {Game {
         window_size: INITIAL_SIZE,
+        last_physics: Instant::now(),
         player_misses: 0,
         opponent_misses: 0,
         player_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
@@ -189,8 +176,8 @@ impl Game {
             let offset_x = (near_topleft.0+radius.0, near_bottomright.0-radius.0);
             let offset_y = (near_topleft.1+radius.1, near_bottomright.1-radius.1);
             // draw corners completely, and only once in case the color is translucent
-            let top_start = (offset_x.0-radius.0, offset_y.0);
-            let top_end = (offset_x.1-radius.0, offset_y.0);
+            let top_start = ((offset_x.0-radius.0)*200.0, offset_y.0*200.0);
+            let top_end = ((offset_x.1-radius.0)*200.0, offset_y.0*200.0);
             let bottom_start = (offset_x.0+radius.0, offset_y.1);
             let bottom_end = (offset_x.1+radius.0, offset_y.1);
             let left_start = (offset_x.0, offset_y.0+radius.1);
@@ -292,7 +279,7 @@ impl Game {
         if self.state == State::Paused {
             // draw pause sign
             let pause_color = hex(PAUSE_COLOR);
-            g.draw_rectangle(rect(0.4, 0.4, 0.075, 0.2), pause_color);
+            g.draw_rectangle(rect(0.4*self.window_size[0], 0.4*self.window_size[1], 0.075*self.window_size[0], 0.2*self.window_size[1]), pause_color);
             g.draw_rectangle(rect(0.525, 0.4, 0.075, 0.2), pause_color);
         }
     }
@@ -439,26 +426,33 @@ impl Game {
 }
 
 impl WindowHandler for Game {
-    fn on_draw(&mut self,  helper: &mut WindowHelper<()>,  graphics: &mut Graphics2D) {
-        //let context = context.scale(size[0], size[1]);
+    fn on_start(&mut self,
+            h: &mut WindowHelper<()>,
+            _: speedy2d::window::WindowStartupInfo
+    ) {
+        h.set_cursor_visible(false);
+        h.set_cursor_grab(false).unwrap();
+    }
+    fn on_draw(&mut self,  h: &mut WindowHelper<()>,  g: &mut Graphics2D) {
+        let prev = self.last_physics;
+        self.last_physics = Instant::now();
+        let elapsed = self.last_physics.saturating_duration_since(prev);
+        self.update(elapsed.as_secs_f32());
 
-        // by default alpha blending is disabled, which means all
-        // semi-transparent colors are considered opaque.
-        // Blend::Alpha blends colors pixel for pixel,
-        // which has a performance cost.
-        // The alternative would be to check for an existing color
-        // in the tile, and blend manually or even statically.
-        //context.draw_state.blend(Blend::Alpha);
-        graphics.clear_screen(Color::BLACK);
+        g.clear_screen(Color::BLACK);
+        self.render(g);
 
-        self.render(graphics);
+        // Required to make the screen update.
+        // Surprisingly doesn't cause 100% CPU usage.
+        h.request_redraw();
     }
 
-    fn on_mouse_move(&mut self,  helper: &mut WindowHelper<()>,  pos: Vector2<f32>) {
+    fn on_mouse_move(&mut self,  _: &mut WindowHelper<()>,  pos: Vector2<f32>) {
         self.mouse_move([pos.x/self.window_size[0], pos.y/self.window_size[1]]);
     }
 
     fn on_mouse_button_down(&mut self,  _: &mut WindowHelper<()>,  button: MouseButton) {
+        println!("on_mouse_button_down");
         self.mouse_press(button);        
     }
 
@@ -466,11 +460,15 @@ impl WindowHandler for Game {
 }
 
 fn main() {
-    let window = Window::new_centered(
-            "space tennis",
-            (INITIAL_SIZE[0] as u32, INITIAL_SIZE[1] as u32),
-    ).unwrap();
-
+    let size = (INITIAL_SIZE[0], INITIAL_SIZE[1]);
+    let size = WindowSize::ScaledPixels(size.into());
+    let options = WindowCreationOptions::new_windowed(size, None)
+            .with_always_on_top(false)
+            .with_decorations(true)
+            .with_resizable(true)
+            .with_transparent(false)
+            .with_vsync(true);
+    let window = Window::new_with_options("space tennis", options).unwrap();
     let game = Game::new();
     window.run_loop(game);
 }
