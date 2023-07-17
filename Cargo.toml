@@ -1,6 +1,6 @@
 [package]
 name = "space_tennis"
-version = "1.0.0"
+version = "2.0.0"
 description = "A 3D pong game made with piston"
 readme = "README.md"
 repository = "https://gitlab.com/torbmol/space_tennis"
@@ -12,8 +12,7 @@ name = "space_tennis"
 path = "space_tennis.rs"
 
 [dependencies]
-piston_window = "0.127"
-piston2d-opengl_graphics = "0.82"
+speedy2d = "1.12.0"
 
 [profile.dev]
 panic = "abort"

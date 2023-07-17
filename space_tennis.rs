@@ -1,4 +1,4 @@
-/* Copyright 2018 Torbjørn Birch Moltu
+/* Copyright 2016-2019, 2022-2023 Torbjørn Birch Moltu
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,20 +23,20 @@
 
 use std::f64::consts::PI;
 
-extern crate opengl_graphics;
-use opengl_graphics::{OpenGL, GlGraphics};
-
-extern crate piston_window;
-use piston_window::{Event,Loop,RenderArgs,UpdateArgs,Input}; // from piston_input
-use piston_window::{ButtonArgs,ButtonState,Button,MouseButton,Motion}; // from piston_input
-use piston_window::{Context,DrawState,Transformed,color,math}; // from piston2d-graphics
-use piston_window::draw_state::Blend; // from piston2d-graphics
-use piston_window::PistonWindow;
-use piston_window::WindowSettings; // from piston::window
-use piston_window::Events; // from piston::event_loop
-mod draw {
-    pub use piston_window::{clear,rectangle,line,ellipse};
-}
+extern crate speedy2d;
+use speedy2d::{Graphics2D, Window};
+use speedy2d::color::Color;
+use speedy2d::dimen::{UVec2, Vec2};
+use speedy2d::window::{
+    KeyScancode,
+    ModifiersState,
+    MouseButton,
+    MouseScrollDistance,
+    VirtualKeyCode,
+    WindowHandler,
+    WindowHelper,
+    WindowStartupInfo
+};
 
 const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
 const ARENA: [f64;3] = [1.0, 1.0, 2.0]; // 
@@ -55,18 +55,36 @@ const FOV: f64 = PI/3.0; // 60°
 const FRONT_FILLS: f64 = 0.8; // of the screen
 //const BACK_FILLS: f64 = 0.3; // of the screen
 
-const WALL_COLOR: &str = "222332f8";
-const WALL_LINE_COLOR: &str = "008800";
+const fn rgb(hex: u32) -> Color {
+    if hex >> 24 != 0 {
+        panic!("value should not be more than 6 hex digits");
+    }
+    let r = (hex >> 16) as f32 / 255.0;
+    let g = ((hex >> 8) & 0xff) as f32 / 255.0;
+    let b = (hex & 0xff) as f32 / 255.0;
+    Color::from_rgb(r, g, b)
+}
+
+const fn argb(hex: u32) -> Color {
+    let a = (hex >> 24) as f32 / 255.0;
+    let r = ((hex >> 16) & 0xff) as f32 / 255.0;
+    let g = ((hex >> 8) & 0xff) as f32 / 255.0;
+    let b = (hex & 0xff) as f32 / 255.0;
+    Color::from_rgba(r, g, b, a)
+}
+
+const WALL_COLOR: Color = argb(0x222332f8);
+const WALL_LINE_COLOR: Color = rgb(0x008800);
 const WALL_LINES: u32 = 5;
 const LINE_WIDTH: f64 = 0.05;
 const LINE_WIDTH_EDGE: f64 = LINE_WIDTH*1.5;
-const RACKET_COLOR: &str = "ddddddaa";
-const RACKET_BORDER_COLOR: &str = "5555dd";
+const RACKET_COLOR: Color = argb(0xddddddaa);
+const RACKET_BORDER_COLOR: Color = rgb(0x5555dd);
 const RACKET_BORDER_WIDTH: [f64;2] = [0.01333, 0.00666]; // [left/right, top/bottom]
-const BALL_COLOR: &str = "aaff55ee";
-const BALL_LINE_COLOR: &str = "eeeeee88";
-const MISS_COLOR: &str = "ff3333";
-const PAUSE_COLOR: &str = "888877aa";
+const BALL_COLOR: Color = argb(0xaaff55ee);
+const BALL_LINE_COLOR: Color = argb(0xeeeeee88);
+const MISS_COLOR: Color = rgb(0xff3333);
+const PAUSE_COLOR: Color = argb(0x888877aa);
 
 fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
          if p <= min   {min}
@@ -79,6 +97,7 @@ fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
 enum State {Playing, Paused, PlayerStart, OpponentStart}
 
 struct Game {
+    window_size: [f64; 2], // changes if window is resized
     ball_pos: [f64; 3],
     ball_vel: [f64; 3],
     player_pos: [f64; 2],
@@ -91,6 +110,7 @@ struct Game {
 }
 impl Game {
     fn new() -> Self {Game {
+        window_size: INITIAL_SIZE,
         player_misses: 0,
         opponent_misses: 0,
         player_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
@@ -102,7 +122,7 @@ impl Game {
         state: State::PlayerStart
     } }
 
-    fn render(&mut self,  _: DrawState,  transform: math::Matrix2d,  gfx: &mut GlGraphics) {
+    fn render(&mut self,  g: &mut Graphics2D) {
         /*
         at the center of the window there is a view cone with a certain angle (field of view)
         at x dept the distance from top to bottom or left to right of view
@@ -117,9 +137,8 @@ impl Game {
         // order depends on its z position
         fn draw_ball(
                 ball_pos_game: [f64;3],  view_distance: f64,
-                transform: [[f64;3];2],  gfx: &mut GlGraphics
+                g: &mut Graphics2D,
         ) {
-            let ball_color = color::hex(BALL_COLOR);
             let ball_viewable = 2.0*(view_distance+ball_pos_game[2])*f64::tan(FOV/2.0);
             let ball_depth_frac = (ARENA[0]/ball_viewable, ARENA[1]/ball_viewable);
             let ball_offset = (0.5 - ball_depth_frac.0/2.0,  0.5 - ball_depth_frac.1/2.0);
@@ -128,25 +147,18 @@ impl Game {
                 ball_offset.1 + ball_depth_frac.1*ball_pos_game[1]
             );
             let ball_frac = BALL_RADIUS*2.0 / ball_viewable;
-            let ball_rect = [
-                ball_pos_screen.0 - ball_frac/2.0,
-                ball_pos_screen.1 - ball_frac/2.0,
-                ball_frac, ball_frac
-            ];
-            draw::ellipse(ball_color, ball_rect, transform, gfx);
+            g.draw_circle(ball_pos_screen, ball_frac, BALL_COLOR);
         }
         if self.ball_pos[2] > ARENA[2] {
-            draw_ball(self.ball_pos, view_distance, transform, gfx);
+            draw_ball(self.ball_pos, view_distance, g);
         }
 
         fn draw_wall_marker(
-                color: &str,  depth: f64,  width: f64,
-                transform: math::Matrix2d,  gfx: &mut GlGraphics
+                color: Color,  depth: f64,  width: f64,  g: &mut Graphics2D,
         ) {
             // width is on the wall, aka the z-dimension.
             // find the draw width by calculating the rectangle of the near and
             // far edge, and setting the center of the lines to the median.
-            let color = color::hex(color);
             let near_viewable = 2.0*(depth-width/2.0)*f64::tan(FOV/2.0);
             let far_viewable = 2.0*(depth+width/2.0)*f64::tan(FOV/2.0);
             let near_area_frac = (ARENA[0]/near_viewable, ARENA[1]/near_viewable);
@@ -162,27 +174,27 @@ impl Game {
             let bottom = [offset_x.0+radius.0, offset_y.1, offset_x.1+radius.0, offset_y.1];
             let left   = [offset_x.0, offset_y.0+radius.1, offset_x.0, offset_y.1+radius.1];
             let right  = [offset_x.1, offset_y.0-radius.1, offset_x.1, offset_y.1-radius.1];
-            draw::line(color, radius.1, top, transform, gfx);
-            draw::line(color, radius.1, bottom, transform, gfx);
-            draw::line(color, radius.0, left, transform, gfx);
-            draw::line(color, radius.0, right, transform, gfx);
+            g.draw_line([top[0], top[1]], [top[2], top[3]], radius.1, color);
+            g.draw_line([bottom[0], bottom[1]], [bottom[2], bottom[3]], radius.1, color);
+            //g.draw_line(left, radius.0, color);
+            //g.draw_line(right, radius.0, color);
         }
         // draw the walls themselves
-        draw_wall_marker(WALL_COLOR, view_distance+ARENA[2]/2.0, ARENA[2], transform, gfx);
+        draw_wall_marker(WALL_COLOR, view_distance+ARENA[2]/2.0, ARENA[2], g);
         let interval = ARENA[2]/(WALL_LINES+1) as f64;
         // the markers on the edges are thicker
-        draw_wall_marker(WALL_LINE_COLOR, view_distance, LINE_WIDTH_EDGE, transform, gfx);
+        draw_wall_marker(WALL_LINE_COLOR, view_distance, LINE_WIDTH_EDGE, g);
         for n in 1..(WALL_LINES+1) {
-            draw_wall_marker(WALL_LINE_COLOR, view_distance + interval*n as f64, LINE_WIDTH, transform, gfx);
+            draw_wall_marker(WALL_LINE_COLOR, view_distance + interval*n as f64, LINE_WIDTH, g);
         }
-        draw_wall_marker(WALL_LINE_COLOR, view_distance+ARENA[2], LINE_WIDTH_EDGE, transform, gfx);
+        draw_wall_marker(WALL_LINE_COLOR, view_distance+ARENA[2], LINE_WIDTH_EDGE, g);
 
         fn draw_racket(
-                pos: [f64;2]/*in arena*/, depth: f64/*from view*/,
-                transform: math::Matrix2d,  gfx: &mut GlGraphics,
+                pos: [f64;2]/*in arena*/,  depth: f64/*from view*/,
+                g: &mut Graphics2D,
         ) {
-            let fill_color = color::hex(RACKET_COLOR);
-            let border_color = color::hex(RACKET_BORDER_COLOR);
+            let fill_color = RACKET_COLOR;
+            let border_color = RACKET_BORDER_COLOR;
             let viewable = 2.0*depth*f64::tan(FOV/2.0);
             let area_frac = [ARENA[0]/viewable, ARENA[1]/viewable];
             let border_frac = [RACKET_BORDER_WIDTH[0]/viewable, RACKET_BORDER_WIDTH[1]/viewable];
@@ -195,7 +207,7 @@ impl Game {
                 racket_frac[0]-2.0*border_frac[0],
                 racket_frac[1]-2.0*border_frac[1],
             ];
-            draw::rectangle(fill_color, fill_area, transform, gfx);
+            g.draw_rectangle(fill_area, fill_color);
             let radius = [border_frac[0]/2.0, border_frac[1]/2.0]; // [left/right, top/bottom]
             let (left,top,right,bottom) = (
                 racket_pos[0]-racket_frac[0]/2.0+radius[0],
@@ -203,25 +215,24 @@ impl Game {
                 racket_pos[0]+racket_frac[0]/2.0-radius[0],
                 racket_pos[1]+racket_frac[1]/2.0-radius[1],
             );
-            draw::line(border_color, radius[1], [left-radius[0], top, right-radius[0], top], transform, gfx);
-            draw::line(border_color, radius[0], [right, top-radius[1], right, bottom-radius[1]], transform, gfx);
-            draw::line(border_color, radius[1], [left+radius[0], bottom, right+radius[0], bottom], transform, gfx);
-            draw::line(border_color, radius[0], [left, top+radius[1], left, bottom+radius[1]], transform, gfx);
+            g.draw_line([left-radius[0], top], [right-radius[0], top], radius[1], border_color);
+            g.draw_line([right, top-radius[1]], [right, bottom-radius[1]], radius[0], border_color);
+            g.draw_line([left+radius[0], bottom], [right+radius[0], bottom], radius[1], border_color);
+            g.draw_line([left, top+radius[1]], [left, bottom+radius[1]], radius[0], border_color);
         }
         // opponent racket
-        draw_racket(self.opponent_pos, view_distance+ARENA[2], transform, gfx);
+        draw_racket(self.opponent_pos, view_distance+ARENA[2], g);
 
         // step 5: ball inside arena
         if self.ball_pos[2] <= ARENA[2]  &&  self.ball_pos[2] >= 0.0 {
-            draw_wall_marker(BALL_LINE_COLOR, view_distance+self.ball_pos[2], LINE_WIDTH, transform, gfx);
-            draw_ball(self.ball_pos, view_distance, transform, gfx);
+            draw_wall_marker(BALL_LINE_COLOR, view_distance+self.ball_pos[2], LINE_WIDTH, g);
+            draw_ball(self.ball_pos, view_distance, g);
         }
 
         // player racket
-        draw_racket(self.player_pos, view_distance, transform, gfx);
+        draw_racket(self.player_pos, view_distance, g);
 
         // misses
-        let miss_color = color::hex(MISS_COLOR);
         let front_viewable = 2.0*view_distance*f64::tan(FOV/2.0);
         let radius_frac = MISS_BALL_RADIUS/front_viewable;
         let n_offset = 3.0*radius_frac;
@@ -229,37 +240,34 @@ impl Game {
         let player_x = 0.5 + (ARENA[0]/front_viewable)/2.0 + 2.0*radius_frac;
         let opponent_x = 0.5 - (ARENA[0]/front_viewable)/2.0 - 4.0*radius_frac;
         for n in (0..self.player_misses).take(MAX_MISSES as usize) {
-            let rect = [player_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
-            draw::ellipse(miss_color, rect, transform, gfx);
+            g.draw_circle([player_x, start_y+n_offset*n], 2.0*radius_frac, MISS_COLOR);
         }
         if self.player_misses > MAX_MISSES {
             let top = start_y + n_offset*(MAX_MISSES as f64);
             let vertical = [player_x+radius_frac*2.0/3.0, top, radius_frac*2.0/3.0, radius_frac*2.0];
             let horizontal = [player_x, top+radius_frac*2.0/3.0, radius_frac*2.0, radius_frac*2.0/3.0];
-            draw::rectangle(miss_color, vertical, transform, gfx);
-            draw::rectangle(miss_color, horizontal, transform, gfx);
+            g.draw_rectangle(vertical, miss_color);
+            g.draw_rectangle(horizontal, miss_color);
         }
         for n in (0..self.opponent_misses).take(MAX_MISSES as usize) {
-            let rect = [opponent_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
-            draw::ellipse(miss_color, rect, transform, gfx);
+            g.draw_circle([opponent_x, start_y+n_offset*n as f64], 2.0*radius_frac, MISS_COLOR);
         }
         if self.opponent_misses > MAX_MISSES {
             let top = start_y + n_offset*MAX_MISSES as f64;
             let vertical = [opponent_x+radius_frac*2.0/3.0, top, radius_frac*2.0/3.0, radius_frac*2.0];
             let horizontal = [opponent_x, top+radius_frac*2.0/3.0, radius_frac*2.0, radius_frac*2.0/3.0];
-            draw::rectangle(miss_color, vertical, transform, gfx);
-            draw::rectangle(miss_color, horizontal, transform, gfx);
+            g.draw_rectangle(vertical, miss_color);
+            g.draw_rectangle(horizontal, miss_color);
         }
 
         if self.ball_pos[2] < 0.0 {
-            draw_ball(self.ball_pos, view_distance, transform, gfx);
+            draw_ball(self.ball_pos, view_distance, g);
         }
 
         if self.state == State::Paused {
             // draw pause sign
-            let pause_color = color::hex(PAUSE_COLOR);
-            draw::rectangle(pause_color, [0.4, 0.4, 0.075, 0.2], transform, gfx);
-            draw::rectangle(pause_color, [0.525, 0.4, 0.075, 0.2], transform, gfx);
+            g.draw_rectangle([0.4, 0.4, 0.075, 0.2], PAUSE_COLOR);
+            g.draw_rectangle([0.525, 0.4, 0.075, 0.2], PAUSE_COLOR);
         }
     }
 
@@ -404,61 +412,39 @@ impl Game {
     }
 }
 
-fn main() {
-    let window_size = [INITIAL_SIZE[0] as u32, INITIAL_SIZE[1] as u32];
-    let mut window: PistonWindow = WindowSettings::new("space tennis", window_size)
-        .vsync(true)
-        .build()
-        .unwrap();
-    let mut gfx = GlGraphics::new(OpenGL::V3_2);
+impl WindowHandler for Game {
+    fn on_draw(&mut self,  helper: &mut WindowHelper<()>,  graphics: &mut Graphics2D) {
+        let context = context.scale(size[0], size[1]);
 
-    let mut size = INITIAL_SIZE; // changes if window is resized
+        // by default alpha blending is disabled, which means all
+        // semi-transparent colors are considered opaque.
+        // Blend::Alpha blends colors pixel for pixel,
+        // which has a performance cost.
+        // The alternative would be to check for an existing color
+        // in the tile, and blend manually or even statically.
+        //context.draw_state.blend(Blend::Alpha);
+        graphics.clear_screen(Color::BLACK);
 
-    let mut game = Game::new();
-    let mut event_loop: Events = window.events;
-    while let Some(e) = event_loop.next(&mut window) {
-        match e {
-            Event::Loop(Loop::Render(render_args)) => {
-                let render_args: RenderArgs = render_args;
-                // An optimization introduced in opengl_graphics 0.39.1 causes
-                // severe glitching if not wrapped in `gfx.draw()`.
-                // (just calling it at the end with an empty closure
-                //  seems to work too, for now...)
-                gfx.draw(render_args.viewport(), |context, gfx| {
-                    let context: Context = context;
-                    let gfx: &mut GlGraphics = gfx; // the same instance as outside
-                    size = context.get_view_size();
-                    let context = context.scale(size[0], size[1]);
-
-                    // by default alpha blending is disabled, which means all
-                    // semi-transparent colors are considered opaque.
-                    // Blend::Alpha blends colors pixel for pixel,
-                    // which has a performance cost.
-                    // The alternative would be to check for an existing color
-                    // in the tile, and blend manually or even statically.
-                    context.draw_state.blend(Blend::Alpha);
-                    draw::clear(color::BLACK, gfx);
-
-                    game.render(context.draw_state, context.transform, gfx);
-                });
-            }
-            Event::Loop(Loop::Update(update_args)) => {
-                let UpdateArgs{dt: deltatime} = update_args;
-                game.update(deltatime);
-            }
-
-            Event::Input(Input::Button(ButtonArgs {
-                    state: ButtonState::Press,
-                    button: Button::Mouse(button),
-                    ..
-            }), _) => {
-                game.mouse_press(button);
-            }
-            Event::Input(Input::Move(Motion::MouseCursor([x,y])), _) => {
-                game.mouse_move([x/size[0], y/size[1]]);
-            }
-            // TODO pause when window loses focus (!= mouse leaves)
-            _ => {}
-        }
+        self.render(graphics);
     }
+
+    fn on_mouse_move(&mut self,  helper: &mut WindowHelper<()>,  [x, y]: [f32; 2]) {
+        self.mouse_move([x/self.window_size[0], y/self.window_size[1]]);
+    }
+
+    fn on_mouse_button_down(&mut self,  _: &mut WindowHelper<()>,  button: MouseButton) {
+        self.mouse_press(button);        
+    }
+
+    // TODO pause when window loses focus (!= mouse leaves)
+}
+
+fn main() {
+    let window = Window::new_centered(
+            "space tennis",
+            (INITIAL_SIZE[0] as u32, INITIAL_SIZE[1] as u32),
+    ).unwrap();
+
+    let game = Game::new();
+    window.run_loop(game);
 }
