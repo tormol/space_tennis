@@ -55,19 +55,15 @@ const FRONT_FILLS: f32 = 0.8; // of the screen
 //const BACK_FILLS: f32 = 0.3; // of the screen
 
 #[track_caller]
-fn hex(mut color: &str) -> Color {
+fn hex(color: &str) -> Color {
     let a = match color.len() {
-        8 => {
-            let (alpha, rem) = color.split_at(2);
-            color = rem;
-            u8::from_str_radix(alpha, 16).unwrap()
-        }
-        6 => 0,
+        8 => u8::from_str_radix(&color[6..], 16).unwrap(),
+        6 => 255,
         _ => panic!("color string must be 6 or 8 characters")
     };
     let r = u8::from_str_radix(&color[..2], 16).unwrap();
     let g = u8::from_str_radix(&color[2..4], 16).unwrap();
-    let b = u8::from_str_radix(&color[4..], 16).unwrap();
+    let b = u8::from_str_radix(&color[4..6], 16).unwrap();
     Color::from_int_rgba(r, g, b, a)
 }
 
@@ -143,7 +139,7 @@ impl Game {
         // order depends on its z position
         fn draw_ball(
                 ball_pos_game: [f32;3],  view_distance: f32,
-                g: &mut Graphics2D,
+                window_size: [f32;2],  g: &mut Graphics2D,
         ) {
             let ball_viewable = 2.0*(view_distance+ball_pos_game[2])*f32::tan(FOV/2.0);
             let ball_depth_frac = (ARENA[0]/ball_viewable, ARENA[1]/ball_viewable);
@@ -153,14 +149,18 @@ impl Game {
                 ball_offset.1 + ball_depth_frac.1*ball_pos_game[1]
             );
             let ball_frac = BALL_RADIUS*2.0 / ball_viewable;
-            g.draw_circle(ball_pos_screen, ball_frac, hex(BALL_COLOR));
+            // scale
+            let ball_pos_screen = (ball_pos_screen.0*window_size[0], ball_pos_screen.1*window_size[1]);
+            let ball_radius = ball_frac * (window_size[0]/2.0 + window_size[1]/2.0) / 2.0;
+            g.draw_circle(ball_pos_screen, ball_radius, hex(BALL_COLOR));
         }
         if self.ball_pos[2] > ARENA[2] {
-            draw_ball(self.ball_pos, view_distance, g);
+            draw_ball(self.ball_pos, view_distance, self.window_size, g);
         }
 
         fn draw_wall_marker(
-                color: Color,  depth: f32,  width: f32,  g: &mut Graphics2D,
+                color: Color,  depth: f32,  width: f32,
+                window_size: [f32;2],  g: &mut Graphics2D,
         ) {
             // width is on the wall, aka the z-dimension.
             // find the draw width by calculating the rectangle of the near and
@@ -175,34 +175,38 @@ impl Game {
             let radius = ((far_topleft.0-near_topleft.0)/2.0, (far_topleft.1-near_topleft.1)/2.0);
             let offset_x = (near_topleft.0+radius.0, near_bottomright.0-radius.0);
             let offset_y = (near_topleft.1+radius.1, near_bottomright.1-radius.1);
+            // scale to window size
+            let radius = (radius.0*window_size[0], radius.1*window_size[1]);
+            let offset_x = (offset_x.0*window_size[0], offset_x.1*window_size[0]);
+            let offset_y = (offset_y.0*window_size[1], offset_y.1*window_size[1]);
             // draw corners completely, and only once in case the color is translucent
-            let top_start = ((offset_x.0-radius.0)*200.0, offset_y.0*200.0);
-            let top_end = ((offset_x.1-radius.0)*200.0, offset_y.0*200.0);
+            let top_start = (offset_x.0-radius.0, offset_y.0);
+            let top_end = (offset_x.1-radius.0, offset_y.0);
             let bottom_start = (offset_x.0+radius.0, offset_y.1);
             let bottom_end = (offset_x.1+radius.0, offset_y.1);
             let left_start = (offset_x.0, offset_y.0+radius.1);
             let left_end = (offset_x.0, offset_y.1+radius.1);
-            let right_start  = (offset_x.1, offset_y.0-radius.1);
+            let right_start = (offset_x.1, offset_y.0-radius.1);
             let right_end = (offset_x.1, offset_y.1-radius.1);
-            g.draw_line(top_start, top_end, radius.1, color);
-            g.draw_line(bottom_start, bottom_end, radius.1, color);
-            g.draw_line(left_start, left_end, radius.0, color);
-            g.draw_line(right_start, right_end, radius.0, color);
+            g.draw_line(top_start, top_end, radius.1*2.0, color);
+            g.draw_line(bottom_start, bottom_end, radius.1*2.0, color);
+            g.draw_line(left_start, left_end, radius.0*2.0, color);
+            g.draw_line(right_start, right_end, radius.0*2.0, color);
         }
         // draw the walls themselves
-        draw_wall_marker(hex(WALL_COLOR), view_distance+ARENA[2]/2.0, ARENA[2], g);
+        draw_wall_marker(hex(WALL_COLOR), view_distance+ARENA[2]/2.0, ARENA[2], self.window_size, g);
         let interval = ARENA[2]/(WALL_LINES+1) as f32;
         // the markers on the edges are thicker
         let wall_line_color = hex(WALL_LINE_COLOR);
-        draw_wall_marker(wall_line_color, view_distance, LINE_WIDTH_EDGE, g);
+        draw_wall_marker(wall_line_color, view_distance, LINE_WIDTH_EDGE, self.window_size, g);
         for n in 1..(WALL_LINES+1) {
-            draw_wall_marker(wall_line_color, view_distance + interval*n as f32, LINE_WIDTH, g);
+            draw_wall_marker(wall_line_color, view_distance + interval*n as f32, LINE_WIDTH, self.window_size, g);
         }
-        draw_wall_marker(wall_line_color, view_distance+ARENA[2], LINE_WIDTH_EDGE, g);
+        draw_wall_marker(wall_line_color, view_distance+ARENA[2], LINE_WIDTH_EDGE, self.window_size, g);
 
         fn draw_racket(
                 pos: [f32;2]/*in arena*/,  depth: f32/*from view*/,
-                g: &mut Graphics2D,
+                window_size: [f32;2],  g: &mut Graphics2D,
         ) {
             let fill_color = hex(RACKET_COLOR);
             let border_color = hex(RACKET_BORDER_COLOR);
@@ -213,10 +217,10 @@ impl Game {
             let racket_frac = [RACKET_SIZE[0]/viewable, RACKET_SIZE[1]/viewable];
             let racket_pos = [area_offset[0]+area_frac[0]*pos[0], area_offset[1]+area_frac[1]*pos[1]];
             let fill_area = rect(
-                racket_pos[0]-racket_frac[0]/2.0+border_frac[0],
-                racket_pos[1]-racket_frac[1]/2.0+border_frac[1],
-                racket_frac[0]-2.0*border_frac[0],
-                racket_frac[1]-2.0*border_frac[1],
+                (racket_pos[0]-racket_frac[0]/2.0+border_frac[0]) * window_size[0],
+                (racket_pos[1]-racket_frac[1]/2.0+border_frac[1]) * window_size[1],
+                (racket_frac[0]-2.0*border_frac[0]) * window_size[0],
+                (racket_frac[1]-2.0*border_frac[1]) * window_size[1],
             );
             g.draw_rectangle(fill_area, fill_color);
             let radius = [border_frac[0]/2.0, border_frac[1]/2.0]; // [left/right, top/bottom]
@@ -232,16 +236,16 @@ impl Game {
             g.draw_line((left, top+radius[1]), (left, bottom+radius[1]), radius[0], border_color);
         }
         // opponent racket
-        draw_racket(self.opponent_pos, view_distance+ARENA[2], g);
+        draw_racket(self.opponent_pos, view_distance+ARENA[2], self.window_size, g);
 
         // step 5: ball inside arena
         if self.ball_pos[2] <= ARENA[2]  &&  self.ball_pos[2] >= 0.0 {
-            draw_wall_marker(hex(BALL_LINE_COLOR), view_distance+self.ball_pos[2], LINE_WIDTH, g);
-            draw_ball(self.ball_pos, view_distance, g);
+            draw_wall_marker(hex(BALL_LINE_COLOR), view_distance+self.ball_pos[2], LINE_WIDTH, self.window_size, g);
+            draw_ball(self.ball_pos, view_distance, self.window_size, g);
         }
 
         // player racket
-        draw_racket(self.player_pos, view_distance, g);
+        draw_racket(self.player_pos, view_distance, self.window_size, g);
 
         // misses
         let miss_color = hex(MISS_COLOR);
@@ -273,14 +277,14 @@ impl Game {
         }
 
         if self.ball_pos[2] < 0.0 {
-            draw_ball(self.ball_pos, view_distance, g);
+            draw_ball(self.ball_pos, view_distance, self.window_size, g);
         }
 
         if self.state == State::Paused {
             // draw pause sign
             let pause_color = hex(PAUSE_COLOR);
             g.draw_rectangle(rect(0.4*self.window_size[0], 0.4*self.window_size[1], 0.075*self.window_size[0], 0.2*self.window_size[1]), pause_color);
-            g.draw_rectangle(rect(0.525, 0.4, 0.075, 0.2), pause_color);
+            g.draw_rectangle(rect(0.525*self.window_size[0], 0.4*self.window_size[1], 0.075*self.window_size[0], 0.2*self.window_size[1]), pause_color);
         }
     }
 
@@ -445,6 +449,11 @@ impl WindowHandler for Game {
         // Required to make the screen update.
         // Surprisingly doesn't cause 100% CPU usage.
         h.request_redraw();
+    }
+
+    fn on_resize(&mut self,  _: &mut WindowHelper<()>,  size: speedy2d::dimen::UVec2) {
+        self.window_size[0] = size.into_f32().x;
+        self.window_size[1] = size.into_f32().y;
     }
 
     fn on_mouse_move(&mut self,  _: &mut WindowHelper<()>,  pos: Vector2<f32>) {
