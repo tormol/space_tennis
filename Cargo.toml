@@ -1,3 +1,6 @@
+# https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#profile-overrides
+cargo-features = ["profile-overrides"]
+
 [package]
 name = "space_tennis"
 version = "1.0.0"
@@ -12,13 +15,25 @@ name = "space_tennis"
 path = "space_tennis.rs"
 
 [dependencies]
-piston_window = "0.127"
-piston2d-opengl_graphics = "0.82"
+engine = {path="engine"}
 
 [profile.dev]
-panic = "abort"
+#panic = "abort" # doesn't work with dylib
+
+[profile.dev.overrides."*"]
+opt-level = 2
+debug = false
+overflow-checks = false
+#[profile.dev.overrides.engine]
+#crate-type = ["dylib"] # doesn't work
 
 [profile.release]
 panic = "abort"
 opt-level = 3
 lto = true
+
+#[profile.release.overrides.engine]
+#crate-type = ["rlib"]
+
+[features]
+dyn = ["engine/dyn"]
