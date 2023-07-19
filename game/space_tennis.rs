@@ -1,31 +1,9 @@
-/* Copyright 2018 Torbjørn Birch Moltu
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
- */
-
-/* Code structure:
- * The game logic and rendering is done by methods attached to the Game struct.
- * `engine/src/piston.rs` handles window setup and extracts wanted events from the event loop.
- */
-
-#![cfg_attr(windows, windows_subsystem = "windows")]
-
+use ::common::*;
 use std::f64::consts::PI;
-extern crate engine;
-use engine::*;
 
-const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
+pub const NAME: &str = "space tennis";
+pub const INITIAL_SIZE: [f64;2] = [500.0, 500.0];
+
 const ARENA: [f64;3] = [1.0, 1.0, 2.0]; // 
 const BALL_RADIUS: f64 = 0.125; // exact representable
 const MISS_BALL_RADIUS: f64 = 0.025;
@@ -56,7 +34,7 @@ const MISS_COLOR: &str = "ff3333";
 const PAUSE_COLOR: &str = "888877aa";
 
 fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
-         if p <= min   {min}
+        if p <= min   {min}
     else if p >= max   {max}
     else if p.is_nan() {(min+max)/2.0}
     else               {p}
@@ -65,7 +43,7 @@ fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
 #[derive(Clone,Copy, PartialEq,Eq)]
 enum State {Playing, Paused, PlayerStart, OpponentStart}
 
-struct SpaceTennis {
+pub struct SpaceTennis {
     ball_pos: [f64; 3],
     ball_vel: [f64; 3],
     player_pos: [f64; 2],
@@ -78,7 +56,7 @@ struct SpaceTennis {
 }
 
 impl SpaceTennis {
-    fn new() -> Self {SpaceTennis {
+    pub fn new() -> Self {SpaceTennis {
         player_misses: 0,
         opponent_misses: 0,
         player_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
@@ -118,7 +96,7 @@ impl SpaceTennis {
 }
 
 impl Game for SpaceTennis {
-    fn render(&mut self,  transform: [[f64;3];2],  gfx: &mut Graphics) {
+    fn render(&mut self,  transform: [[f64;3];2],  gfx: &mut dyn Graphics) {
         /*
         at the center of the window there is a view cone with a certain angle (field of view)
         at x dept the distance from top to bottom or left to right of view
@@ -133,7 +111,7 @@ impl Game for SpaceTennis {
         // order depends on its z position
         fn draw_ball(
                 ball_pos_game: [f64;3],  view_distance: f64,
-                transform: [[f64;3];2],  gfx: &mut Graphics
+                transform: [[f64;3];2],  gfx: &mut dyn Graphics
         ) {
             let ball_color = hex(BALL_COLOR);
             let ball_viewable = 2.0*(view_distance+ball_pos_game[2])*f64::tan(FOV/2.0);
@@ -157,7 +135,7 @@ impl Game for SpaceTennis {
 
         fn draw_wall_marker(
                 color: &str,  depth: f64,  width: f64,
-                transform: [[f64;3];2],  gfx: &mut Graphics
+                transform: [[f64;3];2],  gfx: &mut dyn Graphics
         ) {
             // width is on the wall, aka the z-dimension.
             // find the draw width by calculating the rectangle of the near and
@@ -195,7 +173,7 @@ impl Game for SpaceTennis {
 
         fn draw_racket(
                 pos: [f64;2]/*in arena*/, depth: f64/*from view*/,
-                transform: [[f64;3];2],  gfx: &mut Graphics,
+                transform: [[f64;3];2],  gfx: &mut dyn Graphics,
         ) {
             let fill_color = hex(RACKET_COLOR);
             let border_color = hex(RACKET_BORDER_COLOR);
@@ -393,10 +371,4 @@ impl Game for SpaceTennis {
             self.state = State::Paused;
         }
     }
-}
-
-expose_game!{SpaceTennis}
-fn main() {
-    let mut st = SpaceTennis::new();
-    start(&mut st, "space tennis", INITIAL_SIZE, vec![]);
 }

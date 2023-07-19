@@ -1,0 +1,15 @@
+[package]
+name = "common"
+description = """
+Custom types to avoid any other dependencies in game logic.
+"""
+version = "0.0.0"
+authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+
+[lib]
+path = "common.rs"
+
+[features]
+dyn = []

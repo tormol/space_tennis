@@ -1,5 +1,4 @@
 use common::*;
-use reload::*;
 
 extern crate opengl_graphics;
 use self::opengl_graphics::{OpenGL, GlGraphics};
@@ -14,10 +13,6 @@ use self::piston_window::PistonWindow;
 use self::piston_window::WindowSettings; // from piston::window
 use self::piston_window::Events; // from piston::event_loop
 
-
-pub fn hex(s: &str) -> Color {
-    piston_window::color::hex(s)
-}
 struct GlWrap<'a>(&'a mut GlGraphics);
 impl<'a> Graphics for GlWrap<'a> {
     fn line(&mut self,  color: Color,  width: f64,  where_: [f64;4],  transform: Matrix2d) {
@@ -46,19 +41,18 @@ fn map_button(b: pwMouseButton) -> MouseButton {
 }
 
 #[inline(never)]
-pub fn start(s: StartUpInfo,  functions: FunctionGetter) {
-    let window_size = [s.initial_size[0] as u32, s.initial_size[1] as u32];
-    let mut window: PistonWindow = WindowSettings::new(s.name.to_owned(), window_size)
+pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2]) {
+    let window_size = [initial_size[0] as u32, initial_size[1] as u32];
+    let mut window: PistonWindow = WindowSettings::new(name, window_size)
         .vsync(true)
         .build()
         .unwrap();
     let mut g = GlGraphics::new(OpenGL::V3_2);
 
-    let mut size = s.initial_size; // changes if window is resized
+    let mut size = initial_size; // changes if window is resized
 
     let mut event_loop: Events = window.events;
     while let Some(event) = event_loop.next(&mut window) {
-        let f = functions.get();
         match event {
             Event::Loop(Loop::Render(render_args)) => {
                 let render_args: RenderArgs = render_args;
@@ -81,12 +75,12 @@ pub fn start(s: StartUpInfo,  functions: FunctionGetter) {
                     context.draw_state.blend(Blend::Alpha);
                     piston_window::clear(color::BLACK, g);
                     let wrapper = &mut GlWrap(g);
-                    unsafe{ (f.render)(s.game, context.transform, wrapper) };
+                    game.render(context.transform, wrapper);
                 });
             }
             Event::Loop(Loop::Update(update_args)) => {
                 let UpdateArgs{dt: deltatime} = update_args;
-                unsafe{ (f.update)(s.game, deltatime) };
+                game.update(deltatime);
             }
 
             Event::Input(Input::Button(ButtonArgs {
@@ -94,10 +88,10 @@ pub fn start(s: StartUpInfo,  functions: FunctionGetter) {
                     button: Button::Mouse(button),
                     ..
             }), _) => {
-                unsafe{ (f.mouse_press)(s.game, map_button(button)) };
+                game.mouse_press(map_button(button));
             }
             Event::Input(Input::Move(Motion::MouseCursor([x,y])), _) => {
-                unsafe{ (f.mouse_move)(s.game, [x/size[0], y/size[1]]) };
+                game.mouse_move([x/size[0], y/size[1]]);
             }
             // TODO pause when window loses focus (!= mouse leaves)
 
