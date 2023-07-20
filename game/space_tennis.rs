@@ -371,4 +371,14 @@ impl Game for SpaceTennis {
             self.state = State::Paused;
         }
     }
+
+    fn key_press(&mut self,  key: Key) {
+        println!("key pressed: {:?}", key);
+        // TODO
+    }
+
+    fn key_release(&mut self,  key: Key) {
+        println!("key released: {:?}", key);
+        // TODO
+    }
 }

@@ -6,6 +6,7 @@ use self::opengl_graphics::{OpenGL, GlGraphics};
 extern crate piston_window;
 use self::piston_window::{Event,Loop,RenderArgs,UpdateArgs,Input}; // from piston_input
 use self::piston_window::{ButtonArgs,ButtonState,Button,Motion}; // from piston_input
+use self::piston_window::Key as pwKey; // from piston_input
 use self::piston_window::MouseButton as pwMouseButton; // from piston_input
 use self::piston_window::{Context,Transformed,color}; // from piston2d-graphics
 use self::piston_window::draw_state::Blend; // from piston2d-graphics
@@ -23,6 +24,19 @@ impl<'a> Graphics for GlWrap<'a> {
     }
     fn ellipse(&mut self,  color: Color,  where_: [f64;4],  transform: Matrix2d) {
         piston_window::ellipse(color, where_, transform, self.0)
+    }
+}
+
+fn map_key(key: pwKey) -> Option<Key> {
+    match key {
+        pwKey::Up => Some(Key::ArrowUp),
+        pwKey::Down => Some(Key::ArrowDown),
+        pwKey::Left => Some(Key::ArrowLeft),
+        pwKey::Right => Some(Key::ArrowRight),
+        pwKey::Escape => Some(Key::Escape),
+        pwKey::Return => Some(Key::Enter),
+        pwKey::Space => Some(Key::Space),
+        _ => None
     }
 }
 
@@ -81,6 +95,25 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
             Event::Loop(Loop::Update(update_args)) => {
                 let UpdateArgs{dt: deltatime} = update_args;
                 game.update(deltatime);
+            }
+
+            Event::Input(Input::Button(ButtonArgs {
+                    state: ButtonState::Press,
+                    button: Button::Keyboard(key),
+                    ..
+            }), _) => {
+                if let Some(key) = map_key(key) {
+                    game.key_press(key);
+                }
+            }
+            Event::Input(Input::Button(ButtonArgs {
+                    state: ButtonState::Release,
+                    button: Button::Keyboard(key),
+                    ..
+            }), _) => {
+                if let Some(key) = map_key(key) {
+                    game.key_release(key);
+                }
             }
 
             Event::Input(Input::Button(ButtonArgs {

@@ -22,6 +22,17 @@ pub fn hex(color: &str) -> Color {
 }
 
 #[derive(Debug, Clone,Copy, PartialEq,Eq)]
+pub enum Key {
+    ArrowUp,
+    ArrowDown,
+    ArrowLeft,
+    ArrowRight,
+    Enter,
+    Escape,
+    Space,
+}
+
+#[derive(Debug, Clone,Copy, PartialEq,Eq)]
 pub enum MouseButton {
     Unknown,
     Left,
@@ -37,6 +48,8 @@ pub enum MouseButton {
 pub trait Game {
     fn render(&mut self,  transform: Matrix2d,  gfx: &mut dyn Graphics);
     fn update(&mut self,  dt: f64);
+    fn key_press(&mut self,  key: Key);
+    fn key_release(&mut self,  key: Key);
     fn mouse_move(&mut self,  pos: [f64; 2]);
     fn mouse_press(&mut self,  button: MouseButton);
 }
