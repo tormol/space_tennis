@@ -1,0 +1,17 @@
+[package]
+name = "game"
+description = """
+The game logic, separated into a reloadable dynamic library.
+Has minimal dependencies to reduce compile times.
+"""
+version = "0.0.0"
+authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+
+[lib]
+crate-type = ["dylib"]
+path = "lib.rs"
+
+[dependencies]
+interface = {path="../interface", features=["dyn"]}

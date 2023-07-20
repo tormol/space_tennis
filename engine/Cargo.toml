@@ -1,0 +1,19 @@
+[package]
+name = "engine"
+description = """
+Parts that might be reused between games.
+"""
+version = "0.0.0"
+authors = ["Torbjørn Birch Moltu <t.b.moltu@lyse.net>"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+
+[dependencies]
+piston_window = "0.127"
+piston2d-opengl_graphics = "0.82"
+dlopen = {version="0.1", optional=true}
+notify = {version="6", default-features=false, features=["macos_kqueue"], optional=true}
+interface = {path="../interface"}
+
+[features]
+dyn = ["dlopen", "notify", "interface/dyn"]
