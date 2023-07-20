@@ -1,19 +1,20 @@
 use common::*;
 
 extern crate dlopen;
-extern crate notify;
+extern crate notify_debouncer_mini;
 
 use std::env::consts::{DLL_PREFIX, DLL_SUFFIX};
 use std::fs;
 use std::io::ErrorKind::*;
-use std::path::{PathBuf, MAIN_SEPARATOR_STR};
+use std::path::{Path, PathBuf, MAIN_SEPARATOR_STR};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering::*};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 use dlopen::raw::Library;
-use notify::{RecommendedWatcher, Watcher, RecursiveMode, DebouncedEvent};
+use notify_debouncer_mini::new_debouncer;
+use notify_debouncer_mini::notify::RecursiveMode;
 
 fn build_command(game_source_dir: &str,  cargo_args: &[&str]) -> Command {
     let mut cargo = Command::new("cargo");
@@ -91,45 +92,34 @@ fn reload(lib: &str,  current_size: usize) -> Option<&'static Functions> {
 
 /// Watch for changes in / to src and call a function per change per second
 fn watch(src: &str,  callback: &mut dyn FnMut(PathBuf)) {
-    'rewatch: loop {
-        let (tx, rx) = mpsc::channel();
-        let mut watcher: RecommendedWatcher = match Watcher::new(tx, Duration::from_secs(1)) {
-            Ok(watcher) => watcher,
-            Err(e) => {
-                eprintln!("Cannot create fs watcher: {} - Hotswapping will not work", e);
-                return;
-            }
-        };
-        if let Err(e) = watcher.watch(src, RecursiveMode::NonRecursive) {
-            eprintln!("Cannot watch {:?}: {} - Hotswapping will not work", src, e);
+    let (tx, rx) = mpsc::channel();
+    let mut watcher = match new_debouncer(Duration::from_secs(3), None, tx) {
+        Ok(watcher) => watcher,
+        Err(e) => {
+            eprintln!("Cannot create fs watcher: {} - Hotswapping will not work", e);
             return;
         }
+    };
+    if let Err(e) = watcher.watcher().watch(Path::new(src), RecursiveMode::NonRecursive) {
+        eprintln!("Cannot watch {:?}: {} - Hotswapping will not work", src, e);
+        return;
+    }
 
-        loop {
-            match rx.recv() {
-                Ok(DebouncedEvent::Write(path)) => callback(path),
-                Ok(DebouncedEvent::Create(path)) => callback(path),
-                Ok(DebouncedEvent::Remove(path)) => {
-                    // gedit saves files by deleting it and then creating the modified version.
-                    // when the watchpoint is removed the watcher will not receive new events,
-                    // so we need to restart it.
-                    // an alternative solution would be to always watch a directory, but then we would get events
-                    // for target/ too and would need to filter.
-                    // path is absolute, so check if it ends
-                    if path.ends_with(src) {
-                        callback(path); // hope the file is saved again before the compiler reads it
-                        continue 'rewatch;
-                    }
+    loop {
+        match rx.recv() {
+            Ok(Ok(events)) => {
+                for ev in events {
+                    callback(ev.path);
                 }
-                Ok(DebouncedEvent::Error(e, maybe_path)) => {
-                    eprintln!("fs watch error: {} ({:?})", e, maybe_path);
+            },
+            Ok(Err(errors)) => {
+                for e in errors {
+                    eprintln!("fs watch error: {} ({:?})", e, e.paths);
                 }
-                Err(e) => {
-                    eprintln!("fs watch error: {}, quitting", e);
-                    return;
-                }
-                Ok(e) => println!("other watch event: {:?}", e)
-                //Ok(_) => {}
+            },
+            Err(e) => {
+                eprintln!("fs watcher channel receive error: {}, quitting", e);
+                return;
             }
         }
     }
