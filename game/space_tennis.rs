@@ -93,6 +93,14 @@ impl SpaceTennis {
         let target_y = clamp(ends[1], (RACKET_SIZE[1]/2.0, ARENA[1]-RACKET_SIZE[1]/2.0));
         self.opponent_target = [target_x, target_y];
     }
+
+    fn start_pause(&mut self) {
+        if self.state == State::Paused  ||  self.state == State::PlayerStart {
+            self.state = State::Playing;
+        } else {
+            self.state = State::Paused;
+        }
+    }
 }
 
 impl Game for SpaceTennis {
@@ -365,20 +373,36 @@ impl Game for SpaceTennis {
     }
 
     fn mouse_press(&mut self,  _: MouseButton) {
-        if self.state == State::Paused  ||  self.state == State::PlayerStart {
-            self.state = State::Playing;
-        } else {
-            self.state = State::Paused;
-        }
+        self.start_pause()
     }
 
     fn key_press(&mut self,  key: Key) {
-        println!("key pressed: {:?}", key);
-        // TODO
+        // println!("key pressed: {:?}", key);
+        match key {
+            Key::ArrowUp => {self.player_target[1] = RACKET_SIZE[1]/2.0;},
+            Key::ArrowDown => {self.player_target[1] = ARENA[1]-RACKET_SIZE[1]/2.0;},
+            Key::ArrowLeft => {self.player_target[0] = RACKET_SIZE[0]/2.0;},
+            Key::ArrowRight => {self.player_target[0] = ARENA[0]-RACKET_SIZE[0]/2.0;},
+            // pausing with enter is a bit weird,
+            // but it's nice since it's close to the arrow keys. (and consistency)
+            Key::Space | Key::Enter => self.start_pause(),
+            Key::Escape => {
+                // starting with escape feels weird
+                self.state = match self.state {
+                    State::Playing => State::Paused,
+                    State::Paused => State::Playing,
+                    other => other
+                };
+            },
+        }
     }
 
     fn key_release(&mut self,  key: Key) {
-        println!("key released: {:?}", key);
-        // TODO
+        // println!("key released: {:?}", key);
+        match key {
+            Key::ArrowUp | Key::ArrowDown => {self.player_target[1] = self.player_pos[1];},
+            Key::ArrowLeft | Key::ArrowRight => {self.player_target[0] = self.player_pos[0];},
+            _ => {}
+        }
     }
 }

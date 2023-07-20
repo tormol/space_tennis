@@ -12,8 +12,10 @@ The ball bounces of walls without changing speed, but will take up a percentage
 of the velocity of the racket when it hits it.  
 A new round is started when somebody misses, and the loser starts with the
 ball attached to his racket.  
-Move your racket with the mouse, and click to start the round when you have the ball.
-Pause the game when the ball is in motion by clicking, click again to unpause.
+Move your racket with the mouse or arrow keys, and click any mouse button or
+press space or enter to start the round when you have the ball.  
+Clicking or pressing enter or space when the ball is moving will pause or
+un-pause the game.
 
 ## Compiling
 
