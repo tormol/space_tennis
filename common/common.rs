@@ -44,6 +44,35 @@ pub trait Game {
     fn mouse_press(&mut self,  button: MouseButton);
 }
 
+#[macro_export]
+macro_rules! expose_game{($mod:tt::$game:tt) => {
+    mod $mod;
+
+    pub use self::$mod::{NAME, INITIAL_SIZE};
+    use self::$mod::$game;
+
+    pub fn create_game() -> $game {
+        $game::new()
+    }
+}}
+
+#[macro_export]
+macro_rules! impl_main {($dir:tt) => {
+    extern crate engine;
+
+    #[cfg(feature="dyn")]
+    extern crate $dir;
+    #[cfg(not(feature="dyn"))]
+    mod $dir;
+
+    fn main() {
+        let mut game = game::create_game();
+        #[cfg(feature="dyn")]
+        engine::reload::start_reloading(&game);
+        engine::start(&mut game, game::NAME, game::INITIAL_SIZE);
+    }
+}}
+
 #[cfg(feature="dyn")]
 mod reload {
     use crate::*;
@@ -103,10 +132,15 @@ pub use reload::*;
 
 #[cfg(feature="dyn")]
 #[macro_export]
-macro_rules! expose_game{($game:ty) => {
+macro_rules! expose_game_reloadably{($dir:literal/$mod:tt::$game:tt = $target:literal) => {
+    mod $mod;
+
+    pub use self::$mod::{NAME, INITIAL_SIZE};
+    use self::$mod::$game;
+
     use std::os::raw::c_void;
     use std::mem::size_of;
-    use ::common::{Game, Functions};
+    use ::common::{Game, Functions, ReloadableGame};
 
     unsafe fn game_render_dyn(
             gamestate: *mut c_void,
@@ -132,4 +166,8 @@ macro_rules! expose_game{($game:ty) => {
         mouse_press: game_mouse_press_dyn,
         size: size_of::<$game>()
     };
+
+    pub fn create_game() -> ReloadableGame {
+        ReloadableGame::new($game::new(), GAME, $dir, $target)
+    }
 }}

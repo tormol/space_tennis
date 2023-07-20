@@ -16,16 +16,7 @@
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
-extern crate engine;
+#[macro_use]
+extern crate common;
 
-#[cfg(feature="dyn")]
-extern crate game;
-#[cfg(not(feature="dyn"))]
-mod game;
-
-fn main() {
-    let mut game = game::create_game();
-    #[cfg(feature="dyn")]
-    engine::reload::start_reloading(&game);
-    engine::start(&mut game, game::NAME, game::INITIAL_SIZE);
-}
+impl_main!{game}
