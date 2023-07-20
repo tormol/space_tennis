@@ -13,12 +13,12 @@ name = "space_tennis"
 path = "main.rs"
 
 [dependencies]
-common = {path="common"}
+interface = {path="interface"}
 engine = {path="engine"}
 game = {path="game/", optional=true}
 
 [features]
-dyn = ["engine/dyn", "game"]
+dyn = ["engine/dyn", "interface/dyn", "game"]
 
 # [profile.dev]
 # panic = "abort" # doesn't work with dylib

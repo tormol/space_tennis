@@ -1,4 +1,4 @@
-use common::*;
+use interface::reloading::*;
 
 extern crate dlopen;
 extern crate notify;

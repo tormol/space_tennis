@@ -14,4 +14,4 @@ crate-type = ["dylib"]
 path = "lib.rs"
 
 [dependencies]
-common = {path="../common/", features=["dyn"]}
+interface = {path="../interface", features=["dyn"]}

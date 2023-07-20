@@ -1,4 +1,4 @@
-use ::common::*;
+use ::interface::game::*;
 use std::f64::consts::PI;
 
 pub const NAME: &str = "space tennis";

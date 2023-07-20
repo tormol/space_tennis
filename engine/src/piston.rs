@@ -1,4 +1,4 @@
-use common::*;
+use interface::game::*;
 
 extern crate opengl_graphics;
 use self::opengl_graphics::{OpenGL, GlGraphics};

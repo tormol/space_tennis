@@ -1,4 +1,4 @@
-extern crate common;
+extern crate interface;
 
 mod piston;
 pub use piston::*;

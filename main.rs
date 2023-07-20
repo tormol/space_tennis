@@ -17,6 +17,6 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 #[macro_use]
-extern crate common;
+extern crate interface;
 
 impl_main!{game}
