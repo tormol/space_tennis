@@ -12,8 +12,8 @@ edition = "2021"
 piston_window = "0.127"
 piston2d-opengl_graphics = "0.82"
 dlopen = {version="0.1", optional=true}
-notify-debouncer-mini = {version="0.3", default-features=false, optional=true}
+notify = {version="6", default-features=false, features=["macos_kqueue"], optional=true}
 common = {path="../common/"}
 
 [features]
-dyn = ["dlopen", "notify-debouncer-mini", "common/dyn"]
+dyn = ["dlopen", "notify", "common/dyn"]

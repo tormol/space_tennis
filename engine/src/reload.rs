@@ -1,7 +1,7 @@
 use common::*;
 
 extern crate dlopen;
-extern crate notify_debouncer_mini;
+extern crate notify;
 
 use std::env::consts::{DLL_PREFIX, DLL_SUFFIX};
 use std::fs;
@@ -13,8 +13,8 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 use dlopen::raw::Library;
-use notify_debouncer_mini::new_debouncer;
-use notify_debouncer_mini::notify::RecursiveMode;
+use notify::{recommended_watcher, Watcher, Error, RecursiveMode};
+use notify::event::{Event, EventKind};
 
 fn build_command(game_source_dir: &str,  cargo_args: &[&str]) -> Command {
     let mut cargo = Command::new("cargo");
@@ -90,33 +90,46 @@ fn reload(lib: &str,  current_size: usize) -> Option<&'static Functions> {
 }
 
 
-/// Watch for changes in / to src and call a function per change per second
-fn watch(src: &str,  callback: &mut dyn FnMut(PathBuf)) {
+/// Watch for changes in the folder with the game logic,
+/// and call a function at most once per second
+fn watch(src: &str,  callback: &mut dyn FnMut()) {
+    const DEBOUNCE_INTERVAL: Duration = Duration::from_secs(1);
+    let mut last_forwarded = Instant::now();
+    // run reloads on another thread than the one that handles events,
+    // so that the time between events is't affected by the reload time.
     let (tx, rx) = mpsc::channel();
-    let mut watcher = match new_debouncer(Duration::from_secs(3), None, tx) {
+    let debouncer = move |event: Result<Event,Error>| {
+        match event {
+            Ok(Event { kind: EventKind::Access(_), .. }) => {},
+            // Ok(Event { kind: EventKind::Modify(Modify::Metatdata), .. }) => {},
+            Ok(ev) => {
+                eprintln!("fs event: {:?}", ev);
+                let now = Instant::now();
+                if now.saturating_duration_since(last_forwarded) >= DEBOUNCE_INTERVAL {
+                    last_forwarded = now;
+                    tx.send(()).unwrap();
+                }
+            },
+            Err(e) => {
+                eprintln!("fs watch error: {} ({:?})", e, e.paths);
+            },
+        }
+    };
+    let mut watcher = match recommended_watcher(debouncer) {
         Ok(watcher) => watcher,
         Err(e) => {
             eprintln!("Cannot create fs watcher: {} - Hotswapping will not work", e);
             return;
         }
     };
-    if let Err(e) = watcher.watcher().watch(Path::new(src), RecursiveMode::NonRecursive) {
+    if let Err(e) = watcher.watch(Path::new(src), RecursiveMode::NonRecursive) {
         eprintln!("Cannot watch {:?}: {} - Hotswapping will not work", src, e);
         return;
     }
 
     loop {
         match rx.recv() {
-            Ok(Ok(events)) => {
-                for ev in events {
-                    callback(ev.path);
-                }
-            },
-            Ok(Err(errors)) => {
-                for e in errors {
-                    eprintln!("fs watch error: {} ({:?})", e, e.paths);
-                }
-            },
+            Ok(()) => callback(),
             Err(e) => {
                 eprintln!("fs watcher channel receive error: {}, quitting", e);
                 return;
@@ -136,10 +149,7 @@ pub fn start_reloading(reloadable: &ReloadableGame) {
         println!("command: {:?}", &command);
         // for module mode to work, the source code cannot be inside a subdir.
         println!("Watching {:?} for source code changes", game_dir);
-        watch(game_dir, &mut|_| {
-            // TODO add minimum delay between successful recompiles,
-            // maybe cancel running compiles (although that might corrupt
-            //  incremental builds?)
+        watch(game_dir, &mut|| {
             let started = Instant::now();
             match command.status() {// runs the command
                 Ok(exit) if exit.success() => {},
