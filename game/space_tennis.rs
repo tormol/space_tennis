@@ -1,5 +1,6 @@
 use ::interface::game::*;
 use std::f32::consts::PI;
+use std::time::Instant;
 
 pub const NAME: &str = "space tennis";
 pub const INITIAL_SIZE: [f32;2] = [500.0, 500.0];
@@ -40,23 +41,138 @@ fn clamp(p: f32,  (min,max): (f32,f32)) -> f32 {
     else               {p}
 }
 
-#[derive(Clone,Copy, Default)]
-struct Keys {
-    up: bool,
-    down: bool,
-    left: bool,
-    right: bool,
-}
-
 #[derive(Clone,Copy, PartialEq,Eq)]
 enum State {Playing, Paused, PlayerStart, OpponentStart}
+
+/// Move a racket towards its target, based on manhattan distances.
+fn move_racket(racket: &mut[f32; 2],  target: &[f32; 2],  max_speed: [f32; 2],  dt: f32) -> [f32;2] {
+    let max_move = [max_speed[0]*dt, max_speed[1]*dt];
+    let diff = [target[0]-racket[0], target[1]-racket[1]];
+    let move_x = clamp(diff[0], (-max_move[0], max_move[0]));
+    let move_y = clamp(diff[1], (-max_move[1], max_move[1]));
+    *racket = [racket[0]+move_x, racket[1]+move_y];
+    if dt == 0.0 {[0.0, 0.0]} else {[move_x/dt, move_y/dt]}
+}
+
+#[derive(Clone,Copy, Default, PartialEq)]
+enum Target {
+    Mouse { target: [f32; 2],  since: Instant },
+    Keys {
+        up: Option<Instant>,
+        down: Option<Instant>,
+        left: Option<Instant>,
+        right: Option<Instant>,
+    },
+    #[default]
+    None
+}
+
+impl Target {
+    fn apply(&mut self,  now: Instant,  pos: &mut [f32; 2]) -> [f32; 2] {
+        match self {
+            Target::Mouse { target, since } => {
+                let dt = now.saturating_duration_since(*since).as_secs_f32();
+                *since = now;
+                move_racket(pos, target, PLAYER_MAX_SPEED, dt)
+            }
+            Target::Keys { up, down, left, right } => {
+                let mut target = *pos;
+                let mut dt = 0.0;
+                match (up, down) {
+                    (Some(up_since), None) => {
+                        target[1] = RACKET_SIZE[1] / 2.0;
+                        dt = now.saturating_duration_since(*up_since).as_secs_f32();
+                        *up_since = now;
+                    }
+                    (Some(up_since), Some(down_since)) if *up_since >= *down_since => {
+                        target[1] = RACKET_SIZE[1] / 2.0;
+                        dt = now.saturating_duration_since(*up_since).as_secs_f32();
+                        *up_since = now;
+                    }
+                    (_, Some(down_since)) => {
+                        target[1] = ARENA[1] - RACKET_SIZE[1] / 2.0;
+                        dt = now.saturating_duration_since(*down_since).as_secs_f32();
+                        *down_since = now;
+                    }
+                    (_, _) => {}
+                }
+                match (left, right) {
+                    (Some(left_since), None) => {
+                        target[0] = RACKET_SIZE[0] / 2.0;
+                        dt = now.saturating_duration_since(*left_since).as_secs_f32();
+                        *left_since = now;
+                    }
+                    (Some(left_since), Some(right_since)) if *left_since >= *right_since => {
+                        target[0] = RACKET_SIZE[0] / 2.0;
+                        dt = now.saturating_duration_since(*left_since).as_secs_f32();
+                        *left_since = now;
+                    }
+                    (_, Some(right_since)) => {
+                        target[0] = ARENA[0] - RACKET_SIZE[0] / 2.0;
+                        dt = now.saturating_duration_since(*right_since).as_secs_f32();
+                        *right_since = now;
+                    }
+                    (_, _) => {}
+                }
+                move_racket(pos, &target, PLAYER_MAX_SPEED, dt)
+            }
+            Target::None => [0.0, 0.0]
+        }
+    }
+    fn mouse(&mut self,  racket_pos: &mut [f32; 2],  mouse_pos: [f32; 2]) {
+        let now = Instant::now();
+        self.apply(now, racket_pos);
+        *self = Target::Mouse { target: mouse_pos,  since: now };
+    }
+    fn key_press(&mut self,  racket_pos: &mut [f32; 2],  key: Key) {
+        let now = Instant::now();
+        self.apply(now, racket_pos);
+        if let Target::Keys { up, down, left, right } = self {
+            match key {
+                Key::ArrowUp => {*up = Some(now);}
+                Key::ArrowDown => {*down = Some(now);}
+                Key::ArrowLeft => {*left = Some(now);}
+                Key::ArrowRight => {*right = Some(now);}
+                _ => panic!("called with non-arrow key {:?}", key)
+            }
+        } else {
+            *self = Target::Keys { up: None,  down: None,  left: None,  right: None };
+            self.key_press(racket_pos, key);
+        }
+    }
+    fn key_release(&mut self,  racket_pos: &mut [f32; 2],  key: Key) {
+        let now = Instant::now();
+        self.apply(now, racket_pos);
+        if let Target::Keys { up, down, left, right } = self {
+            fn release_and_reset(
+                    released: &mut Option<Instant>,
+                    opposite: &mut Option<Instant>,
+                    now: Instant,
+            ) {
+                *released = None;
+                if let Some(still_pressed) = opposite {
+                    *still_pressed = now;
+                }
+            }
+
+            match key {
+                Key::ArrowUp => release_and_reset(up, down, now),
+                Key::ArrowDown => release_and_reset(down, up, now),
+                Key::ArrowLeft => release_and_reset(left, right, now),
+                Key::ArrowRight => release_and_reset(right, left, now),
+                _ => {}
+            };
+        }
+        // ignore the release if mouse or none
+    }
+}
 
 pub struct SpaceTennis {
     ball_pos: [f32; 3],
     ball_vel: [f32; 3],
     player_pos: [f32; 2],
-    keys: Keys,
-    player_target: [f32; 2],
+    player_target: Target,
+    player_speed: [f32; 2],
     player_misses: u32,
     opponent_pos: [f32; 2],
     opponent_target: [f32; 2],
@@ -69,8 +185,8 @@ impl SpaceTennis {
         player_misses: 0,
         opponent_misses: 0,
         player_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
-        keys: Keys::default(),
-        player_target: [ARENA[0]/2.0, ARENA[1]/2.0],
+        player_target: Target::None,
+        player_speed: [0.0, 0.0],
         opponent_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
         opponent_target: [ARENA[0]/2.0, ARENA[1]/2.0],
         ball_vel: [0.0, 0.0, BALL_START_ZSPEED],
@@ -339,22 +455,14 @@ impl Game for SpaceTennis {
             return;
         }
 
-        // move rackets: be kind to the players and do that first
-        fn move_racket(racket: &mut[f32;2],  target: &[f32;2],  max_speed: [f32;2],  dt: f32) -> [f32;2] {
-            let max_move = [max_speed[0]*dt, max_speed[1]*dt];
-            let diff = [target[0]-racket[0], target[1]-racket[1]];
-            let move_x = clamp(diff[0], (-max_move[0], max_move[0]));
-            let move_y = clamp(diff[1], (-max_move[1], max_move[1]));
-            *racket = [racket[0]+move_x, racket[1]+move_y];
-            return [move_x/dt, move_y/dt];
-        }
-        let player_speed = move_racket(&mut self.player_pos, &self.player_target, PLAYER_MAX_SPEED, dt);
+        // be kind to the players and move racket before calculating
+        self.player_speed = self.player_target.apply(Instant::now(), &mut self.player_pos);
         let opponent_speed = move_racket(&mut self.opponent_pos, &self.opponent_target, OPPONENT_MAX_SPEED, dt);
 
         if self.state == State::PlayerStart {
             self.ball_pos = [self.player_pos[0], self.player_pos[1], BALL_RADIUS];
             // no loss of speed because it was following the racket without delay
-            self.ball_vel = [player_speed[0], player_speed[1], self.ball_vel[2]];
+            self.ball_vel = [self.player_speed[0], self.player_speed[1], self.ball_vel[2]];
         } else if self.state == State::OpponentStart {
             self.ball_pos = [self.opponent_pos[0], self.opponent_pos[1], ARENA[2]-BALL_RADIUS];
             self.ball_vel = [opponent_speed[0], opponent_speed[1], self.ball_vel[2]];
@@ -408,8 +516,8 @@ impl Game for SpaceTennis {
                 f32::abs(pos[1] - racket_center[1]) <= RACKET_SIZE[1]
             }
             if pos[2] < BALL_RADIUS && within(pos, self.player_pos) {
-                self.ball_vel[0] += player_speed[0]*BRACKET_SPEED_TRANSFER;
-                self.ball_vel[1] += player_speed[1]*BRACKET_SPEED_TRANSFER;
+                self.ball_vel[0] += self.player_speed[0]*BRACKET_SPEED_TRANSFER;
+                self.ball_vel[1] += self.player_speed[1]*BRACKET_SPEED_TRANSFER;
                 self.ball_vel[2] *= -1.0;
                 pos[2] = BALL_RADIUS-(pos[2]-BALL_RADIUS);
             } else if pos[2] > ARENA[2]-BALL_RADIUS && within(pos, self.opponent_pos) {
@@ -437,7 +545,8 @@ impl Game for SpaceTennis {
         let pos = [(pos[0]-front_offset[0])/front_frac[0], (pos[1]-front_offset[1])/front_frac[1]];
         let movable_x = (RACKET_SIZE[0]/2.0, ARENA[0]-RACKET_SIZE[0]/2.0);
         let movable_y = (RACKET_SIZE[1]/2.0, ARENA[1]-RACKET_SIZE[1]/2.0);
-        self.player_target = [clamp(pos[0], movable_x), clamp(pos[1], movable_y)];
+        let pos = [clamp(pos[0], movable_x), clamp(pos[1], movable_y)];
+        self.player_target.mouse(&mut self.player_pos, pos);
     }
 
     fn mouse_press(&mut self,  _: MouseButton) {
@@ -447,21 +556,8 @@ impl Game for SpaceTennis {
     fn key_press(&mut self,  key: Key) {
         // println!("key pressed: {:?}", key);
         match key {
-            Key::ArrowUp => {
-                self.keys.up = true;
-                self.player_target[1] = RACKET_SIZE[1]/2.0;
-            },
-            Key::ArrowDown => {
-                self.keys.down = true;
-                self.player_target[1] = ARENA[1]-RACKET_SIZE[1]/2.0;
-            },
-            Key::ArrowLeft => {
-                self.keys.left = true;
-                self.player_target[0] = RACKET_SIZE[0]/2.0;
-            },
-            Key::ArrowRight => {
-                self.keys.right = true;
-                self.player_target[0] = ARENA[0]-RACKET_SIZE[0]/2.0;
+            Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight => {
+                self.player_target.key_press(&mut self.player_pos, key);
             },
             // pausing with enter is a bit weird,
             // but it's nice since it's close to the arrow keys. (and consistency)
@@ -479,40 +575,8 @@ impl Game for SpaceTennis {
 
     fn key_release(&mut self,  key: Key) {
         // println!("key released: {:?}", key);
-        match key {
-            Key::ArrowUp => {
-                self.keys.up = false;
-                self.player_target[1] = if self.keys.down {
-                    ARENA[1]-RACKET_SIZE[1]/2.0
-                } else {
-                    self.player_pos[1]
-                };
-            },
-            Key::ArrowDown => {
-                self.keys.down = false;
-                self.player_target[1] = if self.keys.up {
-                    RACKET_SIZE[1]/2.0
-                } else {
-                    self.player_pos[1]
-                };
-            },
-            Key::ArrowLeft => {
-                self.keys.left = false;
-                self.player_target[0] = if self.keys.right {
-                    ARENA[0]-RACKET_SIZE[0]/2.0
-                } else {
-                    self.player_pos[0]
-                };
-            },
-            Key::ArrowRight => {
-                self.keys.right = false;
-                self.player_target[0] = if self.keys.left {
-                    RACKET_SIZE[0]/2.0
-                } else {
-                    self.player_pos[0]
-                };
-            },
-            _ => {}
+        if let Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight = key {
+            self.player_target.key_release(&mut self.player_pos, key);
         }
     }
 }
