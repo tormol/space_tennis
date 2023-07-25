@@ -40,6 +40,14 @@ fn clamp(p: f64,  (min,max): (f64,f64)) -> f64 {
     else               {p}
 }
 
+#[derive(Clone,Copy, Default)]
+struct Keys {
+    up: bool,
+    down: bool,
+    left: bool,
+    right: bool,
+}
+
 #[derive(Clone,Copy, PartialEq,Eq)]
 enum State {Playing, Paused, PlayerStart, OpponentStart}
 
@@ -47,6 +55,7 @@ pub struct SpaceTennis {
     ball_pos: [f64; 3],
     ball_vel: [f64; 3],
     player_pos: [f64; 2],
+    keys: Keys,
     player_target: [f64; 2],
     player_misses: u32,
     opponent_pos: [f64; 2],
@@ -60,6 +69,7 @@ impl SpaceTennis {
         player_misses: 0,
         opponent_misses: 0,
         player_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
+        keys: Keys::default(),
         player_target: [ARENA[0]/2.0, ARENA[1]/2.0],
         opponent_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
         opponent_target: [ARENA[0]/2.0, ARENA[1]/2.0],
@@ -379,10 +389,22 @@ impl Game for SpaceTennis {
     fn key_press(&mut self,  key: Key) {
         // println!("key pressed: {:?}", key);
         match key {
-            Key::ArrowUp => {self.player_target[1] = RACKET_SIZE[1]/2.0;},
-            Key::ArrowDown => {self.player_target[1] = ARENA[1]-RACKET_SIZE[1]/2.0;},
-            Key::ArrowLeft => {self.player_target[0] = RACKET_SIZE[0]/2.0;},
-            Key::ArrowRight => {self.player_target[0] = ARENA[0]-RACKET_SIZE[0]/2.0;},
+            Key::ArrowUp => {
+                self.keys.up = true;
+                self.player_target[1] = RACKET_SIZE[1]/2.0;
+            },
+            Key::ArrowDown => {
+                self.keys.down = true;
+                self.player_target[1] = ARENA[1]-RACKET_SIZE[1]/2.0;
+            },
+            Key::ArrowLeft => {
+                self.keys.left = true;
+                self.player_target[0] = RACKET_SIZE[0]/2.0;
+            },
+            Key::ArrowRight => {
+                self.keys.right = true;
+                self.player_target[0] = ARENA[0]-RACKET_SIZE[0]/2.0;
+            },
             // pausing with enter is a bit weird,
             // but it's nice since it's close to the arrow keys. (and consistency)
             Key::Space | Key::Enter => self.start_pause(),
@@ -400,8 +422,38 @@ impl Game for SpaceTennis {
     fn key_release(&mut self,  key: Key) {
         // println!("key released: {:?}", key);
         match key {
-            Key::ArrowUp | Key::ArrowDown => {self.player_target[1] = self.player_pos[1];},
-            Key::ArrowLeft | Key::ArrowRight => {self.player_target[0] = self.player_pos[0];},
+            Key::ArrowUp => {
+                self.keys.up = false;
+                self.player_target[1] = if self.keys.down {
+                    ARENA[1]-RACKET_SIZE[1]/2.0
+                } else {
+                    self.player_pos[1]
+                };
+            },
+            Key::ArrowDown => {
+                self.keys.down = false;
+                self.player_target[1] = if self.keys.up {
+                    RACKET_SIZE[1]/2.0
+                } else {
+                    self.player_pos[1]
+                };
+            },
+            Key::ArrowLeft => {
+                self.keys.left = false;
+                self.player_target[0] = if self.keys.right {
+                    ARENA[0]-RACKET_SIZE[0]/2.0
+                } else {
+                    self.player_pos[0]
+                };
+            },
+            Key::ArrowRight => {
+                self.keys.right = false;
+                self.player_target[0] = if self.keys.left {
+                    RACKET_SIZE[0]/2.0
+                } else {
+                    self.player_pos[0]
+                };
+            },
             _ => {}
         }
     }
