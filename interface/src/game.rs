@@ -1,9 +1,40 @@
-pub type Color = [f32;4];//piston_window::types::Color;
-pub type Matrix2d = [[f64;3];2];//
-pub trait Graphics {
-    fn line(&mut self,  color: Color,  width: f64,  area: [f64;4],  transform: Matrix2d);
-    fn rectangle(&mut self,  color: Color,  area: [f64;4],  transform: Matrix2d);
-    fn ellipse(&mut self,  color: Color,  area: [f64;4],  transform: Matrix2d);
+/// Matches `piston_window::types::Color`
+pub type Color = [f32; 4];
+
+/// An element to render.
+#[derive(Clone,Copy, Debug)]
+pub enum Shape {
+    Line{ color: Color,  width: f64,  area: [f64;4] },
+    Rectangle{ color: Color,  area: [f64;4] },
+    Ellipse{ color: Color,  area: [f64;4] },
+}
+
+/// A list of `Shape`s to render.
+///
+/// Games add elements to it in `Game.render()`,
+/// and engines consume it with `drain()`
+#[derive(Default, Debug)]
+pub struct Graphics {
+    commands: Vec<Shape>,
+}
+
+impl Graphics {
+    pub fn add(&mut self,  shape: Shape) {
+        self.commands.push(shape);
+    }
+    pub fn line(&mut self,  color: Color,  width: f64,  area: [f64;4]) {
+        self.commands.push(Shape::Line{color, width, area});
+    }
+    pub fn rectangle(&mut self,  color: Color,  area: [f64;4]) {
+        self.commands.push(Shape::Rectangle{ color, area });
+    }
+    pub fn ellipse(&mut self,  color: Color,  area: [f64;4]) {
+        self.commands.push(Shape::Ellipse{ color, area });
+    }
+    /// Iterate over all elements and leave the list empty.
+    pub fn drain<'a>(&'a mut self) -> impl Iterator<Item=Shape> + 'a {
+        self.commands.drain(..)
+    }
 }
 
 /// Parse a hex string of 6 or 8 bytes into a color.
@@ -21,6 +52,7 @@ pub fn hex(color: &str) -> Color {
     [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, a as f32 / 255.0]
 }
 
+/// Keys that the game cares about.
 #[derive(Debug, Clone,Copy, PartialEq,Eq)]
 pub enum Key {
     ArrowUp,
@@ -32,6 +64,7 @@ pub enum Key {
     Space,
 }
 
+/// All mouse buttons piston supports.
 #[derive(Debug, Clone,Copy, PartialEq,Eq)]
 pub enum MouseButton {
     Unknown,
@@ -46,7 +79,7 @@ pub enum MouseButton {
 }
 
 pub trait Game {
-    fn render(&mut self,  transform: Matrix2d,  gfx: &mut dyn Graphics);
+    fn render(&mut self,  gfx: &mut Graphics);
     fn update(&mut self,  dt: f64);
     fn key_press(&mut self,  key: Key);
     fn key_release(&mut self,  key: Key);

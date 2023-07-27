@@ -114,7 +114,7 @@ impl SpaceTennis {
 }
 
 impl Game for SpaceTennis {
-    fn render(&mut self,  transform: [[f64;3];2],  gfx: &mut dyn Graphics) {
+    fn render(&mut self,  gfx: &mut Graphics) {
         /*
         at the center of the window there is a view cone with a certain angle (field of view)
         at x dept the distance from top to bottom or left to right of view
@@ -127,10 +127,7 @@ impl Game for SpaceTennis {
         let view_distance = ARENA[0]/(2.0*FRONT_FILLS*f64::tan(FOV/2.0));
 
         // order depends on its z position
-        fn draw_ball(
-                ball_pos_game: [f64;3],  view_distance: f64,
-                transform: [[f64;3];2],  gfx: &mut dyn Graphics
-        ) {
+        fn draw_ball(ball_pos_game: [f64;3],  view_distance: f64,  gfx: &mut Graphics) {
             let ball_color = hex(BALL_COLOR);
             let ball_viewable = 2.0*(view_distance+ball_pos_game[2])*f64::tan(FOV/2.0);
             let ball_depth_frac = (ARENA[0]/ball_viewable, ARENA[1]/ball_viewable);
@@ -145,16 +142,13 @@ impl Game for SpaceTennis {
                 ball_pos_screen.1 - ball_frac/2.0,
                 ball_frac, ball_frac
             ];
-            gfx.ellipse(ball_color, ball_rect, transform);
+            gfx.ellipse(ball_color, ball_rect);
         }
         if self.ball_pos[2] > ARENA[2] {
-            draw_ball(self.ball_pos, view_distance, transform, gfx);
+            draw_ball(self.ball_pos, view_distance, gfx);
         }
 
-        fn draw_wall_marker(
-                color: &str,  depth: f64,  width: f64,
-                transform: [[f64;3];2],  gfx: &mut dyn Graphics
-        ) {
+        fn draw_wall_marker(color: &str,  depth: f64,  width: f64,  gfx: &mut Graphics) {
             // width is on the wall, aka the z-dimension.
             // find the draw width by calculating the rectangle of the near and
             // far edge, and setting the center of the lines to the median.
@@ -174,25 +168,22 @@ impl Game for SpaceTennis {
             let bottom = [offset_x.0+radius.0, offset_y.1, offset_x.1+radius.0, offset_y.1];
             let left   = [offset_x.0, offset_y.0+radius.1, offset_x.0, offset_y.1+radius.1];
             let right  = [offset_x.1, offset_y.0-radius.1, offset_x.1, offset_y.1-radius.1];
-            gfx.line(color, radius.1, top, transform);
-            gfx.line(color, radius.1, bottom, transform);
-            gfx.line(color, radius.0, left, transform);
-            gfx.line(color, radius.0, right, transform);
+            gfx.line(color, radius.1, top);
+            gfx.line(color, radius.1, bottom);
+            gfx.line(color, radius.0, left);
+            gfx.line(color, radius.0, right);
         }
         // draw the walls themselves
-        draw_wall_marker(WALL_COLOR, view_distance+ARENA[2]/2.0, ARENA[2], transform, gfx);
+        draw_wall_marker(WALL_COLOR, view_distance+ARENA[2]/2.0, ARENA[2], gfx);
         let interval = ARENA[2]/(WALL_LINES+1) as f64;
         // the markers on the edges are thicker
-        draw_wall_marker(WALL_LINE_COLOR, view_distance, LINE_WIDTH_EDGE, transform, gfx);
+        draw_wall_marker(WALL_LINE_COLOR, view_distance, LINE_WIDTH_EDGE, gfx);
         for n in 1..(WALL_LINES+1) {
-            draw_wall_marker(WALL_LINE_COLOR, view_distance + interval*n as f64, LINE_WIDTH, transform, gfx);
+            draw_wall_marker(WALL_LINE_COLOR, view_distance + interval*n as f64, LINE_WIDTH, gfx);
         }
-        draw_wall_marker(WALL_LINE_COLOR, view_distance+ARENA[2], LINE_WIDTH_EDGE, transform, gfx);
+        draw_wall_marker(WALL_LINE_COLOR, view_distance+ARENA[2], LINE_WIDTH_EDGE, gfx);
 
-        fn draw_racket(
-                pos: [f64;2]/*in arena*/, depth: f64/*from view*/,
-                transform: [[f64;3];2],  gfx: &mut dyn Graphics,
-        ) {
+        fn draw_racket(pos: [f64;2]/*in arena*/, depth: f64/*from view*/, gfx: &mut Graphics) {
             let fill_color = hex(RACKET_COLOR);
             let border_color = hex(RACKET_BORDER_COLOR);
             let viewable = 2.0*depth*f64::tan(FOV/2.0);
@@ -207,7 +198,7 @@ impl Game for SpaceTennis {
                 racket_frac[0]-2.0*border_frac[0],
                 racket_frac[1]-2.0*border_frac[1],
             ];
-            gfx.rectangle(fill_color, fill_area, transform);
+            gfx.rectangle(fill_color, fill_area);
             let radius = [border_frac[0]/2.0, border_frac[1]/2.0]; // [left/right, top/bottom]
             let (left,top,right,bottom) = (
                 racket_pos[0]-racket_frac[0]/2.0+radius[0],
@@ -215,22 +206,22 @@ impl Game for SpaceTennis {
                 racket_pos[0]+racket_frac[0]/2.0-radius[0],
                 racket_pos[1]+racket_frac[1]/2.0-radius[1],
             );
-            gfx.line(border_color, radius[1], [left-radius[0], top, right-radius[0], top], transform);
-            gfx.line(border_color, radius[0], [right, top-radius[1], right, bottom-radius[1]], transform);
-            gfx.line(border_color, radius[1], [left+radius[0], bottom, right+radius[0], bottom], transform);
-            gfx.line(border_color, radius[0], [left, top+radius[1], left, bottom+radius[1]], transform);
+            gfx.line(border_color, radius[1], [left-radius[0], top, right-radius[0], top]);
+            gfx.line(border_color, radius[0], [right, top-radius[1], right, bottom-radius[1]]);
+            gfx.line(border_color, radius[1], [left+radius[0], bottom, right+radius[0], bottom]);
+            gfx.line(border_color, radius[0], [left, top+radius[1], left, bottom+radius[1]]);
         }
         // opponent racket
-        draw_racket(self.opponent_pos, view_distance+ARENA[2], transform, gfx);
+        draw_racket(self.opponent_pos, view_distance+ARENA[2], gfx);
 
         // step 5: ball inside arena
         if self.ball_pos[2] <= ARENA[2]  &&  self.ball_pos[2] >= 0.0 {
-            draw_wall_marker(BALL_LINE_COLOR, view_distance+self.ball_pos[2], LINE_WIDTH, transform, gfx);
-            draw_ball(self.ball_pos, view_distance, transform, gfx);
+            draw_wall_marker(BALL_LINE_COLOR, view_distance+self.ball_pos[2], LINE_WIDTH, gfx);
+            draw_ball(self.ball_pos, view_distance, gfx);
         }
 
         // player racket
-        draw_racket(self.player_pos, view_distance, transform, gfx);
+        draw_racket(self.player_pos, view_distance, gfx);
 
         // misses
         let miss_color = hex(MISS_COLOR);
@@ -242,36 +233,36 @@ impl Game for SpaceTennis {
         let opponent_x = 0.5 - (ARENA[0]/front_viewable)/2.0 - 4.0*radius_frac;
         for n in (0..self.player_misses).take(MAX_MISSES as usize) {
             let rect = [player_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
-            gfx.ellipse(miss_color, rect, transform);
+            gfx.ellipse(miss_color, rect);
         }
         if self.player_misses > MAX_MISSES {
             let top = start_y + n_offset*(MAX_MISSES as f64);
             let vertical = [player_x+radius_frac*2.0/3.0, top, radius_frac*2.0/3.0, radius_frac*2.0];
             let horizontal = [player_x, top+radius_frac*2.0/3.0, radius_frac*2.0, radius_frac*2.0/3.0];
-            gfx.rectangle(miss_color, vertical, transform);
-            gfx.rectangle(miss_color, horizontal, transform);
+            gfx.rectangle(miss_color, vertical);
+            gfx.rectangle(miss_color, horizontal);
         }
         for n in (0..self.opponent_misses).take(MAX_MISSES as usize) {
             let rect = [opponent_x, start_y+n_offset*n as f64, 2.0*radius_frac, 2.0*radius_frac];
-            gfx.ellipse(miss_color, rect, transform);
+            gfx.ellipse(miss_color, rect);
         }
         if self.opponent_misses > MAX_MISSES {
             let top = start_y + n_offset*MAX_MISSES as f64;
             let vertical = [opponent_x+radius_frac*2.0/3.0, top, radius_frac*2.0/3.0, radius_frac*2.0];
             let horizontal = [opponent_x, top+radius_frac*2.0/3.0, radius_frac*2.0, radius_frac*2.0/3.0];
-            gfx.rectangle(miss_color, vertical, transform);
-            gfx.rectangle(miss_color, horizontal, transform);
+            gfx.rectangle(miss_color, vertical);
+            gfx.rectangle(miss_color, horizontal);
         }
 
         if self.ball_pos[2] < 0.0 {
-            draw_ball(self.ball_pos, view_distance, transform, gfx);
+            draw_ball(self.ball_pos, view_distance, gfx);
         }
 
         if self.state == State::Paused {
             // draw pause sign
             let pause_color = hex(PAUSE_COLOR);
-            gfx.rectangle(pause_color, [0.4, 0.4, 0.075, 0.2], transform);
-            gfx.rectangle(pause_color, [0.525, 0.4, 0.075, 0.2], transform);
+            gfx.rectangle(pause_color, [0.4, 0.4, 0.075, 0.2]);
+            gfx.rectangle(pause_color, [0.525, 0.4, 0.075, 0.2]);
         }
     }
 

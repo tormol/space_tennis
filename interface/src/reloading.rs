@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicPtr, Ordering::*};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Functions {
-    pub render: unsafe fn(*mut c_void,  Matrix2d,  &mut dyn Graphics),
+    pub render: unsafe fn(*mut c_void,  &mut Graphics),
     pub update: unsafe fn(*mut c_void,  f64),
     pub key_press: unsafe fn(*mut c_void,  Key),
     pub key_release: unsafe fn(*mut c_void,  Key),
@@ -38,8 +38,8 @@ impl ReloadableGame {
     }
 }
 impl Game for ReloadableGame {
-    fn render(&mut self,  transform: Matrix2d,  gfx: &mut dyn Graphics) {
-        unsafe{ (self.get().render)(self.game, transform, gfx) };
+    fn render(&mut self,  gfx: &mut Graphics) {
+        unsafe{ (self.get().render)(self.game, gfx) };
     }
     fn update(&mut self,  dt: f64) {
         unsafe{ (self.get().update)(self.game, dt) };
@@ -69,14 +69,10 @@ macro_rules! expose_game_reloadably{($dir:literal/$mod:tt::$game:tt = $target:li
     use std::os::raw::c_void;
     use std::mem::size_of;
     use ::interface::reloading::{Functions, ReloadableGame};
-    use ::interface::game::{Game, Graphics, Key, Matrix2d, MouseButton};
+    use ::interface::game::{Game, Graphics, Key, MouseButton};
 
-    unsafe fn game_render_dyn(
-            gamestate: *mut c_void,
-            transform: Matrix2d,
-            gfx: &mut dyn Graphics,
-    ) {
-        (&mut*(gamestate as *mut $game)).render(transform, gfx)
+    unsafe fn game_render_dyn(gamestate: *mut c_void,  g: &mut Graphics) {
+        (&mut*(gamestate as *mut $game)).render(g)
     }
     unsafe fn game_update_dyn(gamestate: *mut c_void,  deltatime: f64) {
         (&mut*(gamestate as *mut $game)).update(deltatime)

@@ -15,19 +15,6 @@ use self::piston_window::PistonWindow;
 use self::piston_window::WindowSettings; // from piston::window
 use self::piston_window::Events; // from piston::event_loop
 
-struct GlWrap<'a>(&'a mut GlGraphics);
-impl<'a> Graphics for GlWrap<'a> {
-    fn line(&mut self,  color: Color,  width: f64,  where_: [f64;4],  transform: Matrix2d) {
-        piston_window::line(color, width, where_, transform, self.0)
-    }
-    fn rectangle(&mut self,  color: Color,  area: [f64;4],  transform: Matrix2d) {
-        piston_window::rectangle(color, area, transform, self.0)
-    }
-    fn ellipse(&mut self,  color: Color,  where_: [f64;4],  transform: Matrix2d) {
-        piston_window::ellipse(color, where_, transform, self.0)
-    }
-}
-
 fn map_key(key: pwKey) -> Option<Key> {
     match key {
         pwKey::Up => Some(Key::ArrowUp),
@@ -64,6 +51,7 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
         .unwrap();
     let mut g = GlGraphics::new(OpenGL::V3_2);
 
+    let mut shapes = Graphics::default();
     let mut size = initial_size; // changes if window is resized
 
     let mut event_loop: Events = window.events;
@@ -90,8 +78,20 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
                     // in the tile, and blend manually or even statically.
                     context.draw_state.blend(Blend::Alpha);
                     piston_window::clear(color::BLACK, g);
-                    let wrapper = &mut GlWrap(g);
-                    game.render(context.transform, wrapper);
+                    game.render(&mut shapes);
+                    for shape in shapes.drain() {
+                        match shape {
+                            Shape::Line { color, width, area } => {
+                                piston_window::line(color, width, area, context.transform, g);
+                            }
+                            Shape::Rectangle { color, area } => {
+                                piston_window::rectangle(color, area, context.transform, g);
+                            }
+                            Shape::Ellipse { color, area } => {
+                                piston_window::ellipse(color, area, context.transform, g)
+                            }
+                        }
+                    }
                 });
             }
             Event::Loop(Loop::Update(update_args)) => {
