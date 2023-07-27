@@ -1,4 +1,5 @@
 use interface::game::*;
+use piston_window::EventLoop;
 
 extern crate opengl_graphics;
 use self::opengl_graphics::{OpenGL, GlGraphics};
@@ -66,6 +67,7 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
     let mut size = initial_size; // changes if window is resized
 
     let mut event_loop: Events = window.events;
+    event_loop.set_ups(125); // default USB polling rate
     while let Some(event) = event_loop.next(&mut window) {
         match event {
             Event::Loop(Loop::Render(render_args)) => {
