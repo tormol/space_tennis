@@ -4,8 +4,17 @@ pub type Color = [f32; 4];
 /// An element to render.
 #[derive(Clone,Copy, Debug)]
 pub enum Shape {
+    /// A line that doesn't need to be horizontal or vertical.
+    /// `[area[0], area[1]]` is the top left end,
+    /// and `[area[2], area[3]]` are the length of the line.
     Line{ color: Color,  width: f32,  area: [f32;4] },
+    /// A rectangle aligned to the X/Y axes.
+    /// `[area[0], area[1]]` is the top left corner
+    /// and `[area[2], area[3]]` is the size.
     Rectangle{ color: Color,  area: [f32;4] },
+    /// An ellipse.
+    /// `[area[0], area[1]]` are the leftmost and topmost position,
+    /// and `[area[2], area[3]]` is diameters.
     Ellipse{ color: Color,  area: [f32;4] },
 }
 
@@ -67,15 +76,9 @@ pub enum Key {
 /// All mouse buttons piston supports.
 #[derive(Debug, Clone,Copy, PartialEq,Eq)]
 pub enum MouseButton {
-    Unknown,
     Left,
     Right,
     Middle,
-    X1,
-    X2,
-    Button6,
-    Button7,
-    Button8,
 }
 
 pub trait Game {

@@ -33,8 +33,8 @@ impl ReloadableGame {
             game: Box::leak(Box::new(game)) as *mut G as *mut c_void,
         }
     }
-    pub fn get(&self) -> &Functions {
-        unsafe{ &*self.functions.load(Acquire) }
+    fn get(&self) -> &Functions {
+        unsafe { &*self.functions.load(Acquire) }
     }
 }
 impl Game for ReloadableGame {
@@ -58,7 +58,6 @@ impl Game for ReloadableGame {
     }
 }
 
-#[cfg(feature="dyn")]
 #[macro_export]
 macro_rules! expose_game_reloadably{($dir:literal/$mod:tt::$game:tt = $target:literal) => {
     mod $mod;

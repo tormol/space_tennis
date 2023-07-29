@@ -28,22 +28,17 @@ fn map_key(key: pwKey) -> Option<Key> {
     }
 }
 
-fn map_button(b: pwMouseButton) -> MouseButton {
+fn map_button(b: pwMouseButton) -> Option<MouseButton> {
     match b {
-        pwMouseButton::Unknown => MouseButton::Unknown,
-        pwMouseButton::Left => MouseButton::Left,
-        pwMouseButton::Right => MouseButton::Right,
-        pwMouseButton::Middle => MouseButton::Middle,
-        pwMouseButton::X1 => MouseButton::X1,
-        pwMouseButton::X2 => MouseButton::X2,
-        pwMouseButton::Button6 => MouseButton::Button6,
-        pwMouseButton::Button7 => MouseButton::Button7,
-        pwMouseButton::Button8 => MouseButton::Button8,
+        pwMouseButton::Left => Some(MouseButton::Left),
+        pwMouseButton::Right => Some(MouseButton::Right),
+        pwMouseButton::Middle => Some(MouseButton::Middle),
+        _ => None
     }
 }
 
 #[inline(never)]
-pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f32; 2]) {
+pub fn start<G:Game>(mut game: G,  name: &'static str,  initial_size: [f32; 2]) {
     let window_size = [initial_size[0] as u32, initial_size[1] as u32];
     let mut window: PistonWindow = WindowSettings::new(name, window_size)
         .vsync(true)
@@ -129,7 +124,9 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f32; 2])
                     button: Button::Mouse(button),
                     ..
             }), _) => {
-                game.mouse_press(map_button(button));
+                if let Some(button) = map_button(button) {
+                    game.mouse_press(button);
+                }
             }
             Event::Input(Input::Move(Motion::MouseCursor([x,y])), _) => {
                 game.mouse_move([(x/size[0]) as f32, (y/size[1]) as f32]);
