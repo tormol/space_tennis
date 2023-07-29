@@ -215,6 +215,24 @@ impl Game for SpaceTennis {
             draw_ball(self.ball_pos, view_distance, gfx);
         }
 
+        // grid lines to inspect keyboard movements
+        {
+            let grid_lines = 10;
+            let grid_color = hex("aa8888bb");
+            let viewable = 2.0*view_distance*f32::tan(FOV/2.0);
+            let size = [ARENA[0]/viewable, ARENA[1]/viewable];
+            let start = [(1.0-size[0])/2.0, (1.0-size[1])/2.0];
+
+            for x in 0..=grid_lines {
+                let x = start[0] + size[0] * (x as f32 / grid_lines as f32);
+                gfx.line(grid_color, 0.001, [x, start[1], x, 1.0-start[1]]);
+            }
+            for y in 0..=grid_lines {
+                let y = start[1] + size[1] * (y as f32 / grid_lines as f32);
+                gfx.line(grid_color, 0.001, [start[0], y, 1.0-start[0], y]);
+            }
+        }
+
         // player racket
         draw_racket(self.player_pos, view_distance, gfx);
 
