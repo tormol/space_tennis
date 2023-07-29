@@ -43,7 +43,7 @@ fn map_button(b: pwMouseButton) -> MouseButton {
 }
 
 #[inline(never)]
-pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2]) {
+pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f32; 2]) {
     let window_size = [initial_size[0] as u32, initial_size[1] as u32];
     let mut window: PistonWindow = WindowSettings::new(name, window_size)
         .vsync(true)
@@ -52,7 +52,8 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
     let mut g = GlGraphics::new(OpenGL::V3_2);
 
     let mut shapes = Graphics::default();
-    let mut size = initial_size; // changes if window is resized
+    // changes if window is resized
+    let mut size = [initial_size[0] as f64, initial_size[1] as f64];
 
     let mut event_loop: Events = window.events;
     event_loop.set_ups(125); // default USB polling rate
@@ -79,16 +80,21 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
                     context.draw_state.blend(Blend::Alpha);
                     piston_window::clear(color::BLACK, g);
                     game.render(&mut shapes);
+                    fn area_to_f64(area: [f32; 4]) -> [f64; 4] {
+                        [area[0] as f64, area[1] as f64, area[2] as f64, area[3] as f64]
+                    }
+                    let transform = context.transform;
                     for shape in shapes.drain() {
                         match shape {
                             Shape::Line { color, width, area } => {
-                                piston_window::line(color, width, area, context.transform, g);
+                                let area = area_to_f64(area);
+                                piston_window::line(color, width as f64, area, transform, g);
                             }
                             Shape::Rectangle { color, area } => {
-                                piston_window::rectangle(color, area, context.transform, g);
+                                piston_window::rectangle(color, area_to_f64(area), transform, g);
                             }
                             Shape::Ellipse { color, area } => {
-                                piston_window::ellipse(color, area, context.transform, g)
+                                piston_window::ellipse(color, area_to_f64(area), transform, g)
                             }
                         }
                     }
@@ -96,7 +102,7 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
             }
             Event::Loop(Loop::Update(update_args)) => {
                 let UpdateArgs{dt: deltatime} = update_args;
-                game.update(deltatime);
+                game.update(deltatime as f32);
             }
 
             Event::Input(Input::Button(ButtonArgs {
@@ -126,7 +132,7 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
                 game.mouse_press(map_button(button));
             }
             Event::Input(Input::Move(Motion::MouseCursor([x,y])), _) => {
-                game.mouse_move([x/size[0], y/size[1]]);
+                game.mouse_move([(x/size[0]) as f32, (y/size[1]) as f32]);
             }
             // TODO pause when window loses focus (!= mouse leaves)
 

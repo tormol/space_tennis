@@ -4,9 +4,9 @@ pub type Color = [f32; 4];
 /// An element to render.
 #[derive(Clone,Copy, Debug)]
 pub enum Shape {
-    Line{ color: Color,  width: f64,  area: [f64;4] },
-    Rectangle{ color: Color,  area: [f64;4] },
-    Ellipse{ color: Color,  area: [f64;4] },
+    Line{ color: Color,  width: f32,  area: [f32;4] },
+    Rectangle{ color: Color,  area: [f32;4] },
+    Ellipse{ color: Color,  area: [f32;4] },
 }
 
 /// A list of `Shape`s to render.
@@ -22,13 +22,13 @@ impl Graphics {
     pub fn add(&mut self,  shape: Shape) {
         self.commands.push(shape);
     }
-    pub fn line(&mut self,  color: Color,  width: f64,  area: [f64;4]) {
+    pub fn line(&mut self,  color: Color,  width: f32,  area: [f32;4]) {
         self.commands.push(Shape::Line{color, width, area});
     }
-    pub fn rectangle(&mut self,  color: Color,  area: [f64;4]) {
+    pub fn rectangle(&mut self,  color: Color,  area: [f32;4]) {
         self.commands.push(Shape::Rectangle{ color, area });
     }
-    pub fn ellipse(&mut self,  color: Color,  area: [f64;4]) {
+    pub fn ellipse(&mut self,  color: Color,  area: [f32;4]) {
         self.commands.push(Shape::Ellipse{ color, area });
     }
     /// Iterate over all elements and leave the list empty.
@@ -80,9 +80,9 @@ pub enum MouseButton {
 
 pub trait Game {
     fn render(&mut self,  gfx: &mut Graphics);
-    fn update(&mut self,  dt: f64);
+    fn update(&mut self,  dt: f32);
     fn key_press(&mut self,  key: Key);
     fn key_release(&mut self,  key: Key);
-    fn mouse_move(&mut self,  pos: [f64; 2]);
+    fn mouse_move(&mut self,  pos: [f32; 2]);
     fn mouse_press(&mut self,  button: MouseButton);
 }
