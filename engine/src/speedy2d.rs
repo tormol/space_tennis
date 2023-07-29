@@ -45,6 +45,16 @@ fn map_color([r, g, b, a]: [f32; 4]) -> spColor {
     spColor::from_rgba(r, g, b, a)
 }
 
+/// Creates square display area.
+fn letterbox_and_scale(window_size: [f32; 2]) -> (Vector2<f32>, f32) {
+    let scale = f32::min(window_size[0], window_size[1]);
+    let offset = Vector2 {
+        x: (window_size[0] - scale) / 2.0,
+        y: (window_size[1] - scale) / 2.0,
+    };
+    (offset, scale)
+}
+
 struct GameWrapper<G: Game> {
     game: G,
     window_size: [f32; 2], // changes if window is resized
@@ -79,44 +89,26 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
         g.clear_screen(spColor::BLACK);
         self.game.render(&mut self.shapes);
 
-        fn scale_area(area: [f32; 4],  size: [f32; 2]) -> [f32; 4] {
-            [
-                area[0] * size[0],
-                area[1] * size[1],
-                area[2] * size[0],
-                area[3] * size[1],
-            ]
-        }
-
+        let (offset, scale) = letterbox_and_scale(self.window_size);
         for shape in self.shapes.drain() {
             match shape {
                 Shape::Line { color, width, area } => {
-                    let area = scale_area(area, self.window_size);
-                    let start = Vector2::new(area[0], area[1]);
-                    let end = Vector2::new(area[2], area[3]);
-                    // scale thickness based on angle
-                    let length = end - start;
-                    let (sin, cos) = f32::atan2(length.x, length.y).sin_cos();
-                    let scale = self.window_size[0]*cos + self.window_size[1]*sin;
-                    let thickness = width * 2.0 * scale;
+                    let start = Vector2::new(area[0],  area[1])*scale+offset;
+                    let end = Vector2::new(area[2],  area[3])*scale+offset;
+                    let thickness = width * scale * 2.0;
                     let color = map_color(color);
                     g.draw_line(start, end, thickness, color)
                 }
                 Shape::Rectangle { color, area } => {
-                    let area = scale_area(area, self.window_size);
                     let rect = Rectangle::new(
-                        Vector2 { x: area[0], y: area[1] },
-                        Vector2 { x: area[0]+area[2], y: area[1]+area[3] },
+                        Vector2 { x: area[0],  y: area[1] }*scale + offset,
+                        Vector2 { x: area[0]+area[2],  y: area[1]+area[3] }*scale + offset,
                     );
                     g.draw_rectangle(rect, map_color(color));
                 }
-                Shape::Ellipse { color, area } => {
-                    let area = scale_area(area, self.window_size);
-                    let center = Vector2 {
-                        x: area[0] + area[2]/2.0,
-                        y: area[1] + area[3]/2.0,
-                    };
-                    let radius = f32::min(area[2], area[3])/2.0;
+                Shape::Circle{ color, center,  radius } => {
+                    let center = Vector2 {x: center[0],  y: center[1]}*scale + offset;
+                    let radius = radius * scale;
                     let color = map_color(color);
                     g.draw_circle(center, radius, color);
                 }
@@ -134,7 +126,9 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
     }
 
     fn on_mouse_move(&mut self,  _: &mut WindowHelper<()>,  pos: Vector2<f32>) {
-        self.game.mouse_move([pos.x/self.window_size[0], pos.y/self.window_size[1]]);
+        let (offset, scale) = letterbox_and_scale(self.window_size);
+        let pos = (pos - offset) / scale;
+        self.game.mouse_move([pos.x, pos.y]);
     }
 
     fn on_mouse_button_down(&mut self,  _: &mut WindowHelper<()>,  button: spMouseButton) {

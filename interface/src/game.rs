@@ -12,10 +12,7 @@ pub enum Shape {
     /// `[area[0], area[1]]` is the top left corner
     /// and `[area[2], area[3]]` is the size.
     Rectangle{ color: Color,  area: [f32;4] },
-    /// An ellipse.
-    /// `[area[0], area[1]]` are the leftmost and topmost position,
-    /// and `[area[2], area[3]]` is diameters.
-    Ellipse{ color: Color,  area: [f32;4] },
+    Circle{ color: Color,  center: [f32; 2],  radius: f32 },
 }
 
 /// A list of `Shape`s to render.
@@ -37,8 +34,8 @@ impl Graphics {
     pub fn rectangle(&mut self,  color: Color,  area: [f32;4]) {
         self.commands.push(Shape::Rectangle{ color, area });
     }
-    pub fn ellipse(&mut self,  color: Color,  area: [f32;4]) {
-        self.commands.push(Shape::Ellipse{ color, area });
+    pub fn circle(&mut self,  color: Color,  center: [f32; 2],  radius: f32) {
+        self.commands.push(Shape::Circle{ color, center, radius });
     }
     /// Iterate over all elements and leave the list empty.
     pub fn drain<'a>(&'a mut self) -> impl Iterator<Item=Shape> + 'a {

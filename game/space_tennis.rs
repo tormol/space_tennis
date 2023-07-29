@@ -132,17 +132,12 @@ impl Game for SpaceTennis {
             let ball_viewable = 2.0*(view_distance+ball_pos_game[2])*f32::tan(FOV/2.0);
             let ball_depth_frac = (ARENA[0]/ball_viewable, ARENA[1]/ball_viewable);
             let ball_offset = (0.5 - ball_depth_frac.0/2.0,  0.5 - ball_depth_frac.1/2.0);
-            let ball_pos_screen = (
+            let ball_pos_screen = [
                 ball_offset.0 + ball_depth_frac.0*ball_pos_game[0],
                 ball_offset.1 + ball_depth_frac.1*ball_pos_game[1]
-            );
-            let ball_frac = BALL_RADIUS*2.0 / ball_viewable;
-            let ball_rect = [
-                ball_pos_screen.0 - ball_frac/2.0,
-                ball_pos_screen.1 - ball_frac/2.0,
-                ball_frac, ball_frac
             ];
-            gfx.ellipse(ball_color, ball_rect);
+            let ball_frac = BALL_RADIUS / ball_viewable;
+            gfx.circle(ball_color, ball_pos_screen, ball_frac);
         }
         if self.ball_pos[2] > ARENA[2] {
             draw_ball(self.ball_pos, view_distance, gfx);
@@ -232,8 +227,9 @@ impl Game for SpaceTennis {
         let player_x = 0.5 + (ARENA[0]/front_viewable)/2.0 + 2.0*radius_frac;
         let opponent_x = 0.5 - (ARENA[0]/front_viewable)/2.0 - 4.0*radius_frac;
         for n in (0..self.player_misses).take(MAX_MISSES as usize) {
-            let rect = [player_x, start_y+n_offset*n as f32, 2.0*radius_frac, 2.0*radius_frac];
-            gfx.ellipse(miss_color, rect);
+            let x = player_x + radius_frac;
+            let y = start_y + (n_offset*n as f32) + radius_frac;
+            gfx.circle(miss_color, [x, y], radius_frac);
         }
         if self.player_misses > MAX_MISSES {
             let top = start_y + n_offset*(MAX_MISSES as f32);
@@ -243,8 +239,9 @@ impl Game for SpaceTennis {
             gfx.rectangle(miss_color, horizontal);
         }
         for n in (0..self.opponent_misses).take(MAX_MISSES as usize) {
-            let rect = [opponent_x, start_y+n_offset*n as f32, 2.0*radius_frac, 2.0*radius_frac];
-            gfx.ellipse(miss_color, rect);
+            let x = opponent_x + radius_frac;
+            let y = start_y + (n_offset*n as f32) + radius_frac;
+            gfx.circle(miss_color, [x, y], radius_frac);
         }
         if self.opponent_misses > MAX_MISSES {
             let top = start_y + n_offset*MAX_MISSES as f32;
