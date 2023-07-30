@@ -24,9 +24,9 @@ macro_rules! impl_main {($dir:tt) => {
     mod $dir;
 
     fn main() {
-        let mut game = game::create_game();
+        let game = game::create_game();
         #[cfg(feature="dyn")]
         engine::reload::start_reloading(&game);
-        engine::start(&mut game, game::NAME, game::INITIAL_SIZE);
+        engine::start(game, game::NAME, game::INITIAL_SIZE);
     }
 }}

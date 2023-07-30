@@ -1,6 +1,6 @@
 [package]
 name = "space_tennis"
-version = "1.1.0"
+version = "1.2.0"
 description = "A 3D pong game made with piston"
 readme = "README.md"
 repository = "https://gitlab.com/torbmol/space_tennis"
@@ -19,6 +19,7 @@ game = {path="game/", optional=true}
 
 [features]
 dyn = ["engine/dyn", "interface/dyn", "game"]
+piston = ["engine/piston"]
 
 # [profile.dev]
 # panic = "abort" # doesn't work with dylib

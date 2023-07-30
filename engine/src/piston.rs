@@ -15,19 +15,6 @@ use self::piston_window::PistonWindow;
 use self::piston_window::WindowSettings; // from piston::window
 use self::piston_window::Events; // from piston::event_loop
 
-struct GlWrap<'a>(&'a mut GlGraphics);
-impl<'a> Graphics for GlWrap<'a> {
-    fn line(&mut self,  color: Color,  width: f64,  where_: [f64;4],  transform: Matrix2d) {
-        piston_window::line(color, width, where_, transform, self.0)
-    }
-    fn rectangle(&mut self,  color: Color,  area: [f64;4],  transform: Matrix2d) {
-        piston_window::rectangle(color, area, transform, self.0)
-    }
-    fn ellipse(&mut self,  color: Color,  where_: [f64;4],  transform: Matrix2d) {
-        piston_window::ellipse(color, where_, transform, self.0)
-    }
-}
-
 fn map_key(key: pwKey) -> Option<Key> {
     match key {
         pwKey::Up => Some(Key::ArrowUp),
@@ -41,22 +28,17 @@ fn map_key(key: pwKey) -> Option<Key> {
     }
 }
 
-fn map_button(b: pwMouseButton) -> MouseButton {
+fn map_button(b: pwMouseButton) -> Option<MouseButton> {
     match b {
-        pwMouseButton::Unknown => MouseButton::Unknown,
-        pwMouseButton::Left => MouseButton::Left,
-        pwMouseButton::Right => MouseButton::Right,
-        pwMouseButton::Middle => MouseButton::Middle,
-        pwMouseButton::X1 => MouseButton::X1,
-        pwMouseButton::X2 => MouseButton::X2,
-        pwMouseButton::Button6 => MouseButton::Button6,
-        pwMouseButton::Button7 => MouseButton::Button7,
-        pwMouseButton::Button8 => MouseButton::Button8,
+        pwMouseButton::Left => Some(MouseButton::Left),
+        pwMouseButton::Right => Some(MouseButton::Right),
+        pwMouseButton::Middle => Some(MouseButton::Middle),
+        _ => None
     }
 }
 
 #[inline(never)]
-pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2]) {
+pub fn start<G:Game>(mut game: G,  name: &'static str,  initial_size: [f32; 2]) {
     let window_size = [initial_size[0] as u32, initial_size[1] as u32];
     let mut window: PistonWindow = WindowSettings::new(name, window_size)
         .vsync(true)
@@ -64,7 +46,10 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
         .unwrap();
     let mut g = GlGraphics::new(OpenGL::V3_2);
 
-    let mut size = initial_size; // changes if window is resized
+    let mut shapes = Graphics::default();
+    // changes if window is resized
+    let mut size = [initial_size[0] as f64, initial_size[1] as f64];
+    let mut offset = [0.0, 0.0];
 
     let mut event_loop: Events = window.events;
     event_loop.set_ups(125); // default USB polling rate
@@ -79,8 +64,17 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
                 g.draw(render_args.viewport(), |context, g| {
                     let context: Context = context;
                     let g: &mut GlGraphics = g; // the same instance as outside
+
                     size = context.get_view_size();
-                    let context = context.scale(size[0], size[1]);
+                    let scale = f64::min(size[0], size[1]);
+                    offset = [
+                        (size[0]-scale) / 2.0,
+                        (size[1]-scale) / 2.0,
+                    ];
+                    // Handle resized windows by scaling without stretching,
+                    // and adding letterboxing to center.
+                    let context = context.trans(offset[0], offset[1])
+                                         .scale(scale, scale);
 
                     // by default alpha blending is disabled, which means all
                     // semi-transparent colors are considered opaque.
@@ -89,14 +83,38 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
                     // The alternative would be to check for an existing color
                     // in the tile, and blend manually or even statically.
                     context.draw_state.blend(Blend::Alpha);
+
                     piston_window::clear(color::BLACK, g);
-                    let wrapper = &mut GlWrap(g);
-                    game.render(context.transform, wrapper);
+
+                    game.render(&mut shapes);
+
+                    fn area_to_f64(area: [f32; 4]) -> [f64; 4] {
+                        [area[0] as f64, area[1] as f64, area[2] as f64, area[3] as f64]
+                    }
+                    let transform = context.transform;
+                    for shape in shapes.drain() {
+                        match shape {
+                            Shape::Line { color, width, area } => {
+                                let area = area_to_f64(area);
+                                piston_window::line(color, width as f64, area, transform, g);
+                            }
+                            Shape::Rectangle { color, area } => {
+                                piston_window::rectangle(color, area_to_f64(area), transform, g);
+                            }
+                            Shape::Circle { color, center, radius } => {
+                                let area = area_to_f64([
+                                    center[0]-radius, center[1]-radius,
+                                    radius*2.0, radius*2.0,
+                                ]);
+                                piston_window::ellipse(color, area, transform, g)
+                            }
+                        }
+                    }
                 });
             }
             Event::Loop(Loop::Update(update_args)) => {
                 let UpdateArgs{dt: deltatime} = update_args;
-                game.update(deltatime);
+                game.update(deltatime as f32);
             }
 
             Event::Input(Input::Button(ButtonArgs {
@@ -123,10 +141,15 @@ pub fn start<G:Game>(game: &mut G,  name: &'static str,  initial_size: [f64; 2])
                     button: Button::Mouse(button),
                     ..
             }), _) => {
-                game.mouse_press(map_button(button));
+                if let Some(button) = map_button(button) {
+                    game.mouse_press(button);
+                }
             }
             Event::Input(Input::Move(Motion::MouseCursor([x,y])), _) => {
-                game.mouse_move([x/size[0], y/size[1]]);
+                let scale = f64::min(size[0], size[1]);
+                let x = (x-offset[0]) / scale;
+                let y = (y-offset[1]) / scale;
+                game.mouse_move([x as f32, y as f32]);
             }
             // TODO pause when window loses focus (!= mouse leaves)
 
