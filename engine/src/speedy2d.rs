@@ -7,6 +7,7 @@ extern crate speedy2d;
 use speedy2d::{Graphics2D, Window};
 use speedy2d::color::Color as spColor;
 use speedy2d::dimen::Vector2;
+use speedy2d::font::{Font, TextLayout, TextOptions};
 use speedy2d::shape::Rectangle;
 use speedy2d::window::{
     MouseButton as spMouseButton,
@@ -60,6 +61,7 @@ struct GameWrapper<G: Game> {
     window_size: [f32; 2], // changes if window is resized
     last_physics: Instant,
     shapes: Graphics,
+    font: Font,
 }
 
 impl<G: Game> WindowHandler for GameWrapper<G> {
@@ -111,6 +113,20 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
                     let radius = radius * scale;
                     let color = map_color(color);
                     g.draw_circle(center, radius, color);
+                }
+                Shape::StaticText{ color, size, top_left, text } => {
+                    let color = map_color(color);
+                    let position = Vector2 { x: top_left[0], y: top_left[1] } * scale + offset;
+                    let scale = size * scale;
+                    let text = self.font.layout_text(text, scale, TextOptions::new());
+                    g.draw_text(position, color, &text);
+                }
+                Shape::DynamicText{ color, size, top_left, text } => {
+                    let color = map_color(color);
+                    let position = Vector2 { x: top_left[0], y: top_left[1] } * scale + offset;
+                    let scale = size * scale;
+                    let text = self.font.layout_text(&text, scale, TextOptions::new());
+                    g.draw_text(position, color, &text);
                 }
             }
         }
@@ -179,6 +195,7 @@ pub fn start<G:Game+'static>(game: G,  name: &'static str,  initial_size: [f32; 
         window_size: initial_size,
         last_physics: Instant::now(),
         shapes: Graphics::default(),
+        font: Font::new(include_bytes!("../../font/font.ttf")).expect("Parsing font"),
     };
     window.run_loop(wrapper);
 }

@@ -1,8 +1,10 @@
+use std::borrow::Cow;
+
 /// Matches `piston_window::types::Color`
 pub type Color = [f32; 4];
 
 /// An element to render.
-#[derive(Clone,Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Shape {
     /// A line that doesn't need to be horizontal or vertical.
     /// `[area[0], area[1]]` is the top left end,
@@ -13,6 +15,8 @@ pub enum Shape {
     /// and `[area[2], area[3]]` is the size.
     Rectangle{ color: Color,  area: [f32;4] },
     Circle{ color: Color,  center: [f32; 2],  radius: f32 },
+    StaticText{ color: Color,  size: f32,  top_left: [f32; 2],  text: &'static str },
+    DynamicText{ color: Color,  size: f32,  top_left: [f32; 2],  text: String },
 }
 
 /// A list of `Shape`s to render.
@@ -36,6 +40,12 @@ impl Graphics {
     }
     pub fn circle(&mut self,  color: Color,  center: [f32; 2],  radius: f32) {
         self.commands.push(Shape::Circle{ color, center, radius });
+    }
+    pub fn text<S: Into<Cow<'static, str>>>(&mut self,  color: Color,  top_left: [f32; 2],  size: f32,  text: S) {
+        self.commands.push(match text.into() {
+            Cow::Borrowed(s) => Shape::StaticText { color, size, top_left, text: s },
+            Cow::Owned(s) => Shape::DynamicText { color, size, top_left, text: s },
+        });
     }
     /// Iterate over all elements and leave the list empty.
     pub fn drain<'a>(&'a mut self) -> impl Iterator<Item=Shape> + 'a {
