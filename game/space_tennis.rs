@@ -255,6 +255,7 @@ impl Game for SpaceTennis {
             draw_ball(self.ball_pos, view_distance, gfx);
         }
 
+        // UI
         let arena_starts = [
             (1.0-ARENA[0]/front_viewable) / 2.0,
             (1.0-ARENA[1]/front_viewable) / 2.0,
@@ -264,13 +265,22 @@ impl Game for SpaceTennis {
             let pause_color = hex(PAUSE_COLOR);
             gfx.rectangle(pause_color, [0.4, 0.4, 0.075, 0.2]);
             gfx.rectangle(pause_color, [0.525, 0.4, 0.075, 0.2]);
-            let pause_text = "Paused, click any mouse button to continue";
-            gfx.text(pause_color, [0.15, 1.02-arena_starts[1]], 0.05, pause_text);
+            gfx.text(
+                    pause_color,
+                    [0.5, 1.0 - arena_starts[1]*0.6],
+                    [Align::Center, Align::Center],
+                    0.05,
+                    "Paused, click any mouse button to continue",
+            );
         } else if self.state == State::PlayerStart {
-            let start_text = "Start by clicking any mouse button.";
-            let start_color = hex(BALL_COLOR);
-            gfx.text(start_color, [0.22, 1.02-arena_starts[1]], 0.05, start_text);
-        }
+            gfx.text(
+                    hex(BALL_COLOR),
+                    [0.5, 1.0 - arena_starts[1]*0.6],
+                    [Align::Center, Align::Center],
+                    0.05,
+                    "Start by clicking any mouse button.",
+            );
+    }
     }
 
 

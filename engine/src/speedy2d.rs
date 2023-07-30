@@ -114,18 +114,38 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
                     let color = map_color(color);
                     g.draw_circle(center, radius, color);
                 }
-                Shape::StaticText{ color, size, top_left, text } => {
+                Shape::StaticText{ color, size, position, center, text } => {
+                    let size = size * scale;
+                    let text = self.font.layout_text(text, size, TextOptions::new());
+                    let mut position = Vector2 { x: position[0], y: position[1] } * scale + offset;
+                    position.x = match center[0] {
+                        Align::Left => position.x,
+                        Align::Center => position.x - text.width()/2.0,
+                        Align::Right => position.x - text.width(),
+                    };
+                    position.y = match center[1] {
+                        Align::Left => position.y,
+                        Align::Center => position.y - text.height()/2.0,
+                        Align::Right => position.y - text.height(),
+                    };
                     let color = map_color(color);
-                    let position = Vector2 { x: top_left[0], y: top_left[1] } * scale + offset;
-                    let scale = size * scale;
-                    let text = self.font.layout_text(text, scale, TextOptions::new());
                     g.draw_text(position, color, &text);
                 }
-                Shape::DynamicText{ color, size, top_left, text } => {
+                Shape::DynamicText{ color, size, position, center, text } => {
+                    let size = size * scale;
+                    let text = self.font.layout_text(&text, size, TextOptions::new());
+                    let mut position = Vector2 { x: position[0], y: position[1] } * scale + offset;
+                    position.x = match center[0] {
+                        Align::Left => position.x,
+                        Align::Center => position.x - text.width()/2.0,
+                        Align::Right => position.x - text.width(),
+                    };
+                    position.y = match center[1] {
+                        Align::Left => position.y,
+                        Align::Center => position.y - text.height()/2.0,
+                        Align::Right => position.y - text.height(),
+                    };
                     let color = map_color(color);
-                    let position = Vector2 { x: top_left[0], y: top_left[1] } * scale + offset;
-                    let scale = size * scale;
-                    let text = self.font.layout_text(&text, scale, TextOptions::new());
                     g.draw_text(position, color, &text);
                 }
             }
