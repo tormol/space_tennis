@@ -54,10 +54,38 @@ fn move_racket(racket: &mut[f32; 2],  target: &[f32; 2],  max_speed: [f32; 2],  
     if dt == 0.0 {[0.0, 0.0]} else {[move_x/dt, move_y/dt]}
 }
 
+#[derive(Clone,Copy, Default, PartialEq,Eq)]
+#[repr(i8)]
+enum Sign {
+    #[default]
+    None = 0,
+    Negative = -1,
+    Positive = 1,
+}
+
+#[derive(Clone,Copy, Default, PartialEq,Eq)]
+struct Keys {
+    up: bool,
+    down: bool,
+    left: bool,
+    right: bool,
+    x_direction: Sign,
+    y_direction: Sign,
+    /// Number of update cycles this has been unchanged for.
+    /// Making this signed wouldn't remove the need for x_direction,
+    /// because ±1 would then have to mean changed since last turn,
+    /// and ±2 unchanged for one turn.
+    /// Could maybe move this into the variants of Sign, but eh.
+    x_unchanged: u32,
+    /// Number of update cycles this has been unchanged for.
+    y_unchanged: u32,
+}
+
 #[derive(Clone,Copy, Default, PartialEq)]
 enum Target {
     Mouse { target: [f32; 2],  since: Instant },
     Keys {
+        pressed: Keys,
         up: Option<Instant>,
         down: Option<Instant>,
         left: Option<Instant>,
