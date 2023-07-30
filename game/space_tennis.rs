@@ -260,6 +260,22 @@ impl Game for SpaceTennis {
             (1.0-ARENA[0]/front_viewable) / 2.0,
             (1.0-ARENA[1]/front_viewable) / 2.0,
         ];
+        gfx.text(
+                hex(BALL_COLOR),
+                [0.25, arena_starts[1]*0.6],
+                [Align::Center, Align::Center],
+                0.04,
+                format!("level {}", self.player_misses+self.opponent_misses),
+        );
+        let speed = self.ball_vel[0].hypot(self.ball_vel[1]).hypot(self.ball_vel[2]);
+        gfx.text(
+                hex(BALL_COLOR),
+                [0.75, arena_starts[1]*0.6],
+                [Align::Center, Align::Center],
+                0.04,
+                format!("speed: {:.2}", speed),
+        );
+
         if self.state == State::Paused {
             // draw pause sign
             let pause_color = hex(PAUSE_COLOR);
