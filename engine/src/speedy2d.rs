@@ -102,14 +102,17 @@ struct GameWrapper<G: Game> {
 }
 
 impl<G: Game> WindowHandler for GameWrapper<G> {
-    #[cfg(not(target_arch="wasm32"))]
     fn on_start(&mut self,
             h: &mut WindowHelper<()>,
-            _: speedy2d::window::WindowStartupInfo
+            info: speedy2d::window::WindowStartupInfo
     ) {
+        let size = info.viewport_size_pixels().into_f32();
+        self.window_size = [size.x, size.y];
         h.set_cursor_visible(true);
         h.set_cursor_grab(false).unwrap();
+        #[cfg(not(target_arch="wasm32"))]
         let sender = h.create_user_event_sender();
+        #[cfg(not(target_arch="wasm32"))]
         thread::spawn(move || {
             loop {
                 sender.send_event(()).unwrap();
