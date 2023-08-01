@@ -1,10 +1,11 @@
 use interface::game::*;
 
 use std::collections::HashMap;
+use std::rc::Rc;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
-use std::rc::Rc;
-use std::time::{Duration, Instant};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Duration;
 
 extern crate speedy2d;
 use speedy2d::Graphics2D;
@@ -12,6 +13,7 @@ use speedy2d::color::Color as spColor;
 use speedy2d::dimen::Vector2;
 use speedy2d::font::{Font, TextLayout, TextOptions, FormattedTextBlock};
 use speedy2d::shape::Rectangle;
+use speedy2d::time::Stopwatch;
 use speedy2d::window::{
     MouseButton as spMouseButton,
     VirtualKeyCode,
@@ -93,7 +95,8 @@ impl TextCache {
 struct GameWrapper<G: Game> {
     game: G,
     window_size: [f32; 2], // changes if window is resized
-    last_physics: Instant,
+    stopwatch: Stopwatch,
+    last_physics: f64,
     shapes: Graphics,
     text: TextCache,
 }
@@ -117,9 +120,9 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
 
     fn on_user_event(&mut self,  _: &mut WindowHelper<()>,  _: ()) {
         let prev = self.last_physics;
-        self.last_physics = Instant::now();
-        let elapsed = self.last_physics.saturating_duration_since(prev);
-        self.game.update(elapsed.as_secs_f32());
+        self.last_physics = self.stopwatch.secs_elapsed();
+        let elapsed = self.last_physics - prev;
+        self.game.update(elapsed as f32);
     }
 
     fn on_draw(&mut self,  h: &mut WindowHelper<()>,  g: &mut Graphics2D) {
@@ -239,7 +242,8 @@ pub fn start<G:Game+'static>(game: G,  name: &'static str,  initial_size: [f32; 
     let wrapper = GameWrapper {
         game,
         window_size: initial_size,
-        last_physics: Instant::now(),
+        stopwatch: Stopwatch::new().expect("create stopwatch"),
+        last_physics: 0.0,
         shapes: Graphics::default(),
         text: TextCache::new(),
     };
