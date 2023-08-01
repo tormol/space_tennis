@@ -1,13 +1,15 @@
 use interface::game::*;
 
+use std::collections::HashMap;
 use std::thread;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 extern crate speedy2d;
 use speedy2d::{Graphics2D, Window};
 use speedy2d::color::Color as spColor;
 use speedy2d::dimen::Vector2;
-use speedy2d::font::{Font, TextLayout, TextOptions};
+use speedy2d::font::{Font, TextLayout, TextOptions, FormattedTextBlock};
 use speedy2d::shape::Rectangle;
 use speedy2d::window::{
     MouseButton as spMouseButton,
@@ -17,6 +19,9 @@ use speedy2d::window::{
     WindowHelper,
     WindowSize,
 };
+
+extern crate fxhash;
+use fxhash::FxBuildHasher;
 
 const UPDATE_RATE: u32 = 125; // the standard USB polling rate.
 
@@ -56,12 +61,35 @@ fn letterbox_and_scale(window_size: [f32; 2]) -> (Vector2<f32>, f32) {
     (offset, scale)
 }
 
+struct TextCache {
+    font: Font,
+    statics: HashMap<(&'static str, i32), Rc<FormattedTextBlock>, FxBuildHasher>,
+}
+
+impl TextCache {
+    fn new() -> Self {
+        TextCache {
+            font: Font::new(include_bytes!("../../font/font.ttf")).expect("Parsing font"),
+            statics: HashMap::default(),
+        }
+    }
+    fn create(&self,  text: &str,  scaled_size: f32) -> Rc<FormattedTextBlock> {
+        self.font.layout_text(text, scaled_size, TextOptions::new())
+    }
+    fn get_static(&mut self,  text: &'static str,  scaled_size: f32) -> Rc<FormattedTextBlock> {
+        let key = (text, scaled_size as i32);
+        self.statics.entry(key).or_insert_with(|| {
+            self.font.layout_text(text, scaled_size, TextOptions::new())
+        }).clone()
+    }
+}
+
 struct GameWrapper<G: Game> {
     game: G,
     window_size: [f32; 2], // changes if window is resized
     last_physics: Instant,
     shapes: Graphics,
-    font: Font,
+    text: TextCache,
 }
 
 impl<G: Game> WindowHandler for GameWrapper<G> {
@@ -115,8 +143,7 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
                     g.draw_circle(center, radius, color);
                 }
                 Shape::StaticText{ color, size, position, center, text } => {
-                    let size = size * scale;
-                    let text = self.font.layout_text(text, size, TextOptions::new());
+                    let text = self.text.get_static(text, size * scale);
                     let mut position = Vector2 { x: position[0], y: position[1] } * scale + offset;
                     position.x = match center[0] {
                         Align::Left => position.x,
@@ -132,8 +159,7 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
                     g.draw_text(position, color, &text);
                 }
                 Shape::DynamicText{ color, size, position, center, text } => {
-                    let size = size * scale;
-                    let text = self.font.layout_text(&text, size, TextOptions::new());
+                    let text = self.text.create(&text, size * scale);
                     let mut position = Vector2 { x: position[0], y: position[1] } * scale + offset;
                     position.x = match center[0] {
                         Align::Left => position.x,
@@ -215,7 +241,7 @@ pub fn start<G:Game+'static>(game: G,  name: &'static str,  initial_size: [f32; 
         window_size: initial_size,
         last_physics: Instant::now(),
         shapes: Graphics::default(),
-        font: Font::new(include_bytes!("../../font/font.ttf")).expect("Parsing font"),
+        text: TextCache::new(),
     };
     window.run_loop(wrapper);
 }
