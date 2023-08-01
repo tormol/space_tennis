@@ -17,6 +17,11 @@ interface = {path="interface"}
 engine = {path="engine"}
 game = {path="game/", optional=true}
 
+[target.'cfg(target_arch="wasm32")'.dependencies]
+log = "0.4"
+wasm-logger = "0.2"
+console_error_panic_hook = "0.1.6"
+
 [features]
 dyn = ["engine/dyn", "interface/dyn", "game"]
 piston = ["engine/piston"]

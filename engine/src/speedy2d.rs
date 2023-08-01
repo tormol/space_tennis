@@ -1,28 +1,36 @@
 use interface::game::*;
 
 use std::collections::HashMap;
-use std::thread;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+#[cfg(not(target_arch = "wasm32"))]
+use std::thread;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Duration;
 
 extern crate speedy2d;
-use speedy2d::{Graphics2D, Window};
+use speedy2d::Graphics2D;
 use speedy2d::color::Color as spColor;
 use speedy2d::dimen::Vector2;
 use speedy2d::font::{Font, TextLayout, TextOptions, FormattedTextBlock};
 use speedy2d::shape::Rectangle;
+use speedy2d::time::Stopwatch;
 use speedy2d::window::{
     MouseButton as spMouseButton,
     VirtualKeyCode,
-    WindowCreationOptions,
     WindowHandler,
     WindowHelper,
-    WindowSize,
 };
+#[cfg(target_arch="wasm32")]
+use speedy2d::WebCanvas;
+#[cfg(not(target_arch = "wasm32"))]
+use speedy2d::Window;
+#[cfg(not(target_arch="wasm32"))]
+use speedy2d::window::{WindowCreationOptions, WindowSize};
 
 extern crate fxhash;
 use fxhash::FxBuildHasher;
 
+#[cfg(not(target_arch="wasm32"))]
 const UPDATE_RATE: u32 = 125; // the standard USB polling rate.
 
 fn map_key(key: VirtualKeyCode) -> Option<Key> {
@@ -87,7 +95,8 @@ impl TextCache {
 struct GameWrapper<G: Game> {
     game: G,
     window_size: [f32; 2], // changes if window is resized
-    last_physics: Instant,
+    stopwatch: Stopwatch,
+    last_physics: f64,
     shapes: Graphics,
     text: TextCache,
 }
@@ -95,11 +104,15 @@ struct GameWrapper<G: Game> {
 impl<G: Game> WindowHandler for GameWrapper<G> {
     fn on_start(&mut self,
             h: &mut WindowHelper<()>,
-            _: speedy2d::window::WindowStartupInfo
+            info: speedy2d::window::WindowStartupInfo
     ) {
+        let size = info.viewport_size_pixels().into_f32();
+        self.window_size = [size.x, size.y];
         h.set_cursor_visible(true);
         h.set_cursor_grab(false).unwrap();
+        #[cfg(not(target_arch="wasm32"))]
         let sender = h.create_user_event_sender();
+        #[cfg(not(target_arch="wasm32"))]
         thread::spawn(move || {
             loop {
                 sender.send_event(()).unwrap();
@@ -110,12 +123,15 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
 
     fn on_user_event(&mut self,  _: &mut WindowHelper<()>,  _: ()) {
         let prev = self.last_physics;
-        self.last_physics = Instant::now();
-        let elapsed = self.last_physics.saturating_duration_since(prev);
-        self.game.update(elapsed.as_secs_f32());
+        self.last_physics = self.stopwatch.secs_elapsed();
+        let elapsed = self.last_physics - prev;
+        self.game.update(elapsed as f32);
     }
 
     fn on_draw(&mut self,  h: &mut WindowHelper<()>,  g: &mut Graphics2D) {
+        #[cfg(target_arch="wasm32")]
+        self.on_user_event(h, ());
+
         g.clear_screen(spColor::BLACK);
         self.game.render(&mut self.shapes);
 
@@ -226,22 +242,33 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
 
 #[inline(never)]
 pub fn start<G:Game+'static>(game: G,  name: &'static str,  initial_size: [f32; 2]) {
-    let window_size = Vector2 { x: initial_size[0], y: initial_size[1] };
-    let window_size = WindowSize::ScaledPixels(window_size);
-    let options = WindowCreationOptions::new_windowed(window_size, None)
-            .with_always_on_top(false)
-            .with_decorations(true)
-            .with_resizable(true)
-            .with_transparent(false)
-            .with_vsync(true);
-    let window = Window::new_with_options(name, options).unwrap();
-
     let wrapper = GameWrapper {
         game,
         window_size: initial_size,
-        last_physics: Instant::now(),
+        stopwatch: Stopwatch::new().expect("create stopwatch"),
+        last_physics: 0.0,
         shapes: Graphics::default(),
         text: TextCache::new(),
     };
-    window.run_loop(wrapper);
+
+    #[cfg(target_arch="wasm32")]
+    {
+        let _ = name;
+        WebCanvas::new_for_id("space_tennis_game", wrapper)
+            .expect("bind to canvas");
+        // .unregister_when_dropped() would make the game end immediately.
+    }
+    #[cfg(not(target_arch="wasm32"))]
+    {
+        let window_size = Vector2 { x: initial_size[0], y: initial_size[1] };
+        let window_size = WindowSize::ScaledPixels(window_size);
+        let options = WindowCreationOptions::new_windowed(window_size, None)
+                .with_always_on_top(false)
+                .with_decorations(true)
+                .with_resizable(true)
+                .with_transparent(false)
+                .with_vsync(true);
+        let window = Window::new_with_options(name, options).unwrap();
+        window.run_loop(wrapper);
+    }
 }
