@@ -56,6 +56,7 @@ pub struct SpaceTennis {
     ball_vel: [f32; 3],
     player_pos: [f32; 2],
     keys: Keys,
+    mouse_pos: [f32; 2],
     player_target: [f32; 2],
     player_misses: u32,
     opponent_pos: [f32; 2],
@@ -70,6 +71,7 @@ impl SpaceTennis {
         opponent_misses: 0,
         player_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
         keys: Keys::default(),
+        mouse_pos: [0.0, 0.0],
         player_target: [ARENA[0]/2.0, ARENA[1]/2.0],
         opponent_pos: [ARENA[0]/2.0, ARENA[1]/2.0],
         opponent_target: [ARENA[0]/2.0, ARENA[1]/2.0],
@@ -417,12 +419,23 @@ impl Game for SpaceTennis {
         let front_frac = [ARENA[0]/front_viewable, ARENA[1]/front_viewable];
         let front_offset = [0.5-front_frac[0]/2.0, 0.5-front_frac[1]/2.0];
         let pos = [(pos[0]-front_offset[0])/front_frac[0], (pos[1]-front_offset[1])/front_frac[1]];
+        self.mouse_pos = pos;
         let movable_x = (RACKET_SIZE[0]/2.0, ARENA[0]-RACKET_SIZE[0]/2.0);
         let movable_y = (RACKET_SIZE[1]/2.0, ARENA[1]-RACKET_SIZE[1]/2.0);
         self.player_target = [clamp(pos[0], movable_x), clamp(pos[1], movable_y)];
     }
 
-    fn mouse_press(&mut self,  _: MouseButton) {
+    fn mouse_press(&mut self,  button: MouseButton) {
+        if self.state == State::Playing
+        && button == MouseButton::Left
+        && self.mouse_pos[0] >= 0.0
+        && self.mouse_pos[1] >= 0.0
+        && self.mouse_pos[0] <= ARENA[0]
+        && self.mouse_pos[1] <= ARENA[1] {
+            // Ignore presses within the arena area
+            // to make the game playable with touch-screen (and stylus).
+            return;
+        }
         self.start_pause()
     }
 
