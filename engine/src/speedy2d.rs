@@ -1,12 +1,13 @@
 use interface::game::*;
 
 use std::collections::HashMap;
+#[cfg(not(target_arch = "wasm32"))]
 use std::thread;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 extern crate speedy2d;
-use speedy2d::{Graphics2D, Window};
+use speedy2d::Graphics2D;
 use speedy2d::color::Color as spColor;
 use speedy2d::dimen::Vector2;
 use speedy2d::font::{Font, TextLayout, TextOptions, FormattedTextBlock};
@@ -14,15 +15,20 @@ use speedy2d::shape::Rectangle;
 use speedy2d::window::{
     MouseButton as spMouseButton,
     VirtualKeyCode,
-    WindowCreationOptions,
     WindowHandler,
     WindowHelper,
-    WindowSize,
 };
+#[cfg(target_arch="wasm32")]
+use speedy2d::WebCanvas;
+#[cfg(not(target_arch = "wasm32"))]
+use speedy2d::Window;
+#[cfg(not(target_arch="wasm32"))]
+use speedy2d::window::{WindowCreationOptions, WindowSize};
 
 extern crate fxhash;
 use fxhash::FxBuildHasher;
 
+#[cfg(not(target_arch="wasm32"))]
 const UPDATE_RATE: u32 = 125; // the standard USB polling rate.
 
 fn map_key(key: VirtualKeyCode) -> Option<Key> {
@@ -93,6 +99,7 @@ struct GameWrapper<G: Game> {
 }
 
 impl<G: Game> WindowHandler for GameWrapper<G> {
+    #[cfg(not(target_arch="wasm32"))]
     fn on_start(&mut self,
             h: &mut WindowHelper<()>,
             _: speedy2d::window::WindowStartupInfo
@@ -116,6 +123,9 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
     }
 
     fn on_draw(&mut self,  h: &mut WindowHelper<()>,  g: &mut Graphics2D) {
+        #[cfg(target_arch="wasm32")]
+        self.on_user_event(h, ());
+
         g.clear_screen(spColor::BLACK);
         self.game.render(&mut self.shapes);
 
@@ -226,16 +236,6 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
 
 #[inline(never)]
 pub fn start<G:Game+'static>(game: G,  name: &'static str,  initial_size: [f32; 2]) {
-    let window_size = Vector2 { x: initial_size[0], y: initial_size[1] };
-    let window_size = WindowSize::ScaledPixels(window_size);
-    let options = WindowCreationOptions::new_windowed(window_size, None)
-            .with_always_on_top(false)
-            .with_decorations(true)
-            .with_resizable(true)
-            .with_transparent(false)
-            .with_vsync(true);
-    let window = Window::new_with_options(name, options).unwrap();
-
     let wrapper = GameWrapper {
         game,
         window_size: initial_size,
@@ -243,5 +243,25 @@ pub fn start<G:Game+'static>(game: G,  name: &'static str,  initial_size: [f32; 
         shapes: Graphics::default(),
         text: TextCache::new(),
     };
-    window.run_loop(wrapper);
+
+    #[cfg(target_arch="wasm32")]
+    {
+        let _ = name;
+        WebCanvas::new_for_id("space_tennis_game", wrapper)
+            .expect("bind to canvas");
+        // .unregister_when_dropped() would make the game end immediately.
+    }
+    #[cfg(not(target_arch="wasm32"))]
+    {
+        let window_size = Vector2 { x: initial_size[0], y: initial_size[1] };
+        let window_size = WindowSize::ScaledPixels(window_size);
+        let options = WindowCreationOptions::new_windowed(window_size, None)
+                .with_always_on_top(false)
+                .with_decorations(true)
+                .with_resizable(true)
+                .with_transparent(false)
+                .with_vsync(true);
+        let window = Window::new_with_options(name, options).unwrap();
+        window.run_loop(wrapper);
+    }
 }

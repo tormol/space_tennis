@@ -1,4 +1,7 @@
-target
+/target/
+/wasm/*.wasm
+/wasm/*.ts
+/wasm/*.js
 
 [Tt]humbs.db
 .DS_Store
