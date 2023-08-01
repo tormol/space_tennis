@@ -108,6 +108,9 @@ pub fn start<G:Game>(mut game: G,  name: &'static str,  initial_size: [f32; 2]) 
                                 ]);
                                 piston_window::ellipse(color, area, transform, g)
                             }
+                            Shape::StaticText { .. } | Shape::DynamicText { .. } => {
+                                /*unimplemented*/
+                            }
                         }
                     }
                 });

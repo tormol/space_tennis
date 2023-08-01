@@ -226,6 +226,22 @@ impl Game for SpaceTennis {
         let start_y = 0.5-(ARENA[1]/front_viewable)/2.0;
         let player_x = 0.5 + (ARENA[0]/front_viewable)/2.0 + 2.0*radius_frac;
         let opponent_x = 0.5 - (ARENA[0]/front_viewable)/2.0 - 4.0*radius_frac;
+        if self.player_misses > 0  || self.opponent_misses > 0{
+            gfx.text(
+                    miss_color,
+                    [opponent_x, start_y - n_offset],
+                    [Align::Left, Align::Left],
+                    radius_frac*2.0,
+                    "opponents misses",
+            );
+            gfx.text(
+                    miss_color,
+                    [player_x + radius_frac*2.0, start_y - n_offset],
+                    [Align::Right, Align::Left],
+                    radius_frac*2.0,
+                    "your misses",
+            );
+        }
         for n in (0..self.player_misses).take(MAX_MISSES as usize) {
             let x = player_x + radius_frac;
             let y = start_y + (n_offset*n as f32) + radius_frac;
@@ -255,12 +271,48 @@ impl Game for SpaceTennis {
             draw_ball(self.ball_pos, view_distance, gfx);
         }
 
+        // UI
+        let arena_starts = [
+            (1.0-ARENA[0]/front_viewable) / 2.0,
+            (1.0-ARENA[1]/front_viewable) / 2.0,
+        ];
+        gfx.text(
+                hex(BALL_COLOR),
+                [0.35, arena_starts[1]*0.6],
+                [Align::Center, Align::Center],
+                0.04,
+                format!("level {}", self.player_misses+self.opponent_misses),
+        );
+        let speed = self.ball_vel[0].hypot(self.ball_vel[1]).hypot(self.ball_vel[2]);
+        gfx.text(
+                hex(BALL_COLOR),
+                [0.65, arena_starts[1]*0.6],
+                [Align::Center, Align::Center],
+                0.04,
+                format!("speed: {:.2}", speed),
+        );
+
         if self.state == State::Paused {
             // draw pause sign
             let pause_color = hex(PAUSE_COLOR);
             gfx.rectangle(pause_color, [0.4, 0.4, 0.075, 0.2]);
             gfx.rectangle(pause_color, [0.525, 0.4, 0.075, 0.2]);
-        }
+            gfx.text(
+                    pause_color,
+                    [0.5, 1.0 - arena_starts[1]*0.6],
+                    [Align::Center, Align::Center],
+                    0.05,
+                    "Paused, click any mouse button to continue",
+            );
+        } else if self.state == State::PlayerStart {
+            gfx.text(
+                    hex(BALL_COLOR),
+                    [0.5, 1.0 - arena_starts[1]*0.6],
+                    [Align::Center, Align::Center],
+                    0.05,
+                    "Start by clicking any mouse button.",
+            );
+    }
     }
 
 
