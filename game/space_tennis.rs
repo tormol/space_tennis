@@ -281,7 +281,7 @@ impl Game for SpaceTennis {
                 [0.35, arena_starts[1]*0.6],
                 [Align::Center, Align::Center],
                 0.04,
-                format!("level {}", self.player_misses+self.opponent_misses),
+                format!("set {}", 1+self.player_misses+self.opponent_misses),
         );
         let speed = self.ball_vel[0].hypot(self.ball_vel[1]).hypot(self.ball_vel[2]);
         gfx.text(
