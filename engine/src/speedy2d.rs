@@ -27,11 +27,18 @@ use speedy2d::Window;
 #[cfg(not(target_arch="wasm32"))]
 use speedy2d::window::{WindowCreationOptions, WindowSize};
 
+#[cfg(not(target_arch="wasm32"))]
+extern crate image;
+#[cfg(not(target_arch="wasm32"))]
+use image::{ImageFormat, GenericImageView};
+
 extern crate fxhash;
 use fxhash::FxBuildHasher;
 
 #[cfg(not(target_arch="wasm32"))]
 const UPDATE_RATE: u32 = 125; // the standard USB polling rate.
+#[cfg(not(target_arch="wasm32"))]
+const ICON: &[u8] = include_bytes!("../../wasm/favicon.ico");
 
 fn map_key(key: VirtualKeyCode) -> Option<Key> {
     match key {
@@ -110,15 +117,24 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
         self.window_size = [size.x, size.y];
         h.set_cursor_visible(true);
         h.set_cursor_grab(false).unwrap();
+
+        // icon is not used in wasm, and threads don't work there.
         #[cfg(not(target_arch="wasm32"))]
-        let sender = h.create_user_event_sender();
-        #[cfg(not(target_arch="wasm32"))]
-        thread::spawn(move || {
-            loop {
-                sender.send_event(()).unwrap();
-                thread::sleep(Duration::from_secs_f32((UPDATE_RATE as f32).recip()));
-            }
-        });
+        {
+            let icon = image::load_from_memory_with_format(ICON, ImageFormat::Ico)
+                .expect("parse icon");
+            let size = Vector2::new(icon.width(), icon.height());
+            let icon = icon.as_rgba8().expect("get rgba");
+            h.set_icon_from_rgba_pixels(icon.as_raw().clone(), size).expect("set icon");
+
+            let sender = h.create_user_event_sender();
+            thread::spawn(move || {
+                loop {
+                    sender.send_event(()).unwrap();
+                    thread::sleep(Duration::from_secs_f32((UPDATE_RATE as f32).recip()));
+                }
+            });
+        }
     }
 
     fn on_user_event(&mut self,  _: &mut WindowHelper<()>,  _: ()) {

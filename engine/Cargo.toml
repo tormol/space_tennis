@@ -20,6 +20,9 @@ fxhash = "0.2.1"
 dlopen = {version="0.1", optional=true}
 notify = {version="6", default-features=false, features=["macos_kqueue"], optional=true}
 
+[target.'cfg(not(target_arch="wasm32"))'.dependencies]
+image = "0.23.14"
+
 [features]
 dyn = ["dlopen", "notify", "interface/dyn"]
 piston = [] # ["piston_window", "piston2d-opengl_graphics"]
