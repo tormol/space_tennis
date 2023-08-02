@@ -14,5 +14,5 @@ clippy:
 	cargo clippy --features dyn
 
 wasm:
-	cargo build --target wasm32-unknown-unknown
-	wasm-bindgen target/wasm32-unknown-unknown/debug/space_tennis.wasm --out-dir wasm --target web
+	cargo build --target wasm32-unknown-unknown --release
+	wasm-bindgen target/wasm32-unknown-unknown/release/space_tennis.wasm --out-dir wasm --target web
