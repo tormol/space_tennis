@@ -89,12 +89,12 @@ impl TextCache {
         }
     }
     fn create(&self,  text: &str,  scaled_size: f32) -> Rc<FormattedTextBlock> {
-        self.font.layout_text(text, scaled_size, TextOptions::new())
+        Rc::new(self.font.layout_text(text, scaled_size, TextOptions::new()))
     }
     fn get_static(&mut self,  text: &'static str,  scaled_size: f32) -> Rc<FormattedTextBlock> {
         let key = (text, scaled_size as i32);
         self.statics.entry(key).or_insert_with(|| {
-            self.font.layout_text(text, scaled_size, TextOptions::new())
+            Rc::new(self.font.layout_text(text, scaled_size, TextOptions::new()))
         }).clone()
     }
 }
