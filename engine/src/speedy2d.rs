@@ -116,7 +116,12 @@ impl<G: Game> WindowHandler for GameWrapper<G> {
         let size = info.viewport_size_pixels().into_f32();
         self.window_size = [size.x, size.y];
         h.set_cursor_visible(true);
-        h.set_cursor_grab(false).unwrap();
+        if let Err(e) = h.set_cursor_grab(false) {
+            match e.cause() {
+                Some(ref cause) => eprintln!("set_cursor_grab(false) failed: {} ({})", e, cause),
+                None => eprintln!("set_cursor_grab(false) failed: {}", e),
+            }
+        }
 
         // icon is not used in wasm, and threads don't work there.
         #[cfg(not(target_arch="wasm32"))]
@@ -284,7 +289,9 @@ pub fn start<G:Game+'static>(game: G,  name: &'static str,  initial_size: [f32; 
                 .with_resizable(true)
                 .with_transparent(false)
                 .with_vsync(true);
-        let window = Window::new_with_options(name, options).unwrap();
-        window.run_loop(wrapper);
+        match Window::new_with_options(name, options) {
+            Ok(window) => window.run_loop(wrapper),
+            Err(e) => panic!("creating window failed: {:#?}", e),
+        }
     }
 }
