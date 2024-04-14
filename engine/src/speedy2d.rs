@@ -305,7 +305,8 @@ pub fn start<G:Game+'static>(game: G,  name: &'static str,  initial_size: [f32; 
                 .with_resizable(true)
                 .with_transparent(false)
                 .with_vsync(true);
-        match Window::new_with_options(name, options) {
+        // maybe need to refresh / restert the program that reads applications/?
+        match Window::new_with_options("space tennis"/*"no.torbmol.spacetennis"*/, options) {
             Ok(window) => window.run_loop(wrapper),
             Err(e) => panic!("creating window failed: {:#?}", e),
         }
