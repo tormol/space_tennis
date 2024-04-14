@@ -281,8 +281,8 @@ pub fn start<G:Game+'static>(game: G,  name: &'static str,  initial_size: [f32; 
     }
     #[cfg(not(target_arch="wasm32"))]
     {
-        let window_size = Vector2 { x: initial_size[0], y: initial_size[1] };
-        let window_size = WindowSize::ScaledPixels(window_size);
+        let window_size = Vector2 { x: initial_size[0] as u32, y: initial_size[1] as u32 };
+        let window_size = WindowSize::PhysicalPixels(window_size);
         let options = WindowCreationOptions::new_windowed(window_size, None)
                 .with_always_on_top(false)
                 .with_decorations(true)
