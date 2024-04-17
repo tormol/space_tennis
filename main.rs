@@ -1,4 +1,4 @@
-/* Copyright 2018 Torbjørn Birch Moltu
+/* Copyright 2016-2019, 2022-2024 Torbjørn Birch Moltu
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

@@ -59,6 +59,6 @@ for the original `cargo build` or `cargo run`.
 
 ## License
 
-Copyright 2018 Torbjørn Birch Moltu. Licensed under the
+Copyright 2016-2019, 2022-2024 Torbjørn Birch Moltu. Licensed under the
 GNU General Public License, as published by the Free Software Foundation,
 either version 3 of the License, or (at your option) any later version.
